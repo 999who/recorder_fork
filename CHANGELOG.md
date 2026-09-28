@@ -1,8 +1,10 @@
-# Rejestr Zmian (CHANGELOG)
-
-## [2026-09-28 13:05:00] - Przyspieszenie Transkrypcji do Poziomu Whisper Flow (Latency 1.8s & Optymalizacja AMD Ryzen AI)
+## [v0.7.2] - 2026-09-28: Przyspieszenie Transkrypcji do Poziomu Whisper Flow (Latency 1.8s & Optymalizacja AMD Ryzen AI)
 
 ### Wprowadzone zmiany:
+0. **100% Bezpieczny Fallback (Zero Crash Guarantee):**
+   - Na komputerach bez układów NPU / AMD Ryzen AI (np. procesory Intel Core, starsze AMD Ryzen czy wirtualne maszyny) system automatycznie i bezszelestnie przełącza się na sprawdzony, uniwersalny tryb CPU (int8 AVX).
+   - Dynamiczny przydział wątków i bezpieczne bloki try...except gwarantują stabilność na każdym sprzęcie.
+
 1. **Błyskawiczne Cięcie Bloków VAD (Fast Slicing Latency 1.8–2.2s):**
    - Zmodyfikowano logikę wycinania bloków w `recorder/ui/workers.py` (zarówno dla mikrofonu, jak i dźwięku systemu WASAPI Loopback).
    - Zredukowano próg bufora z 6.0s/14.0s/25.0s do:
