@@ -24,8 +24,10 @@
    - Ustawiono dedykowany przydział 4 wątków roboczych na rdzeniach Zen 5 Performance, co zapobiega dławieniu rdzeni Zen 5c, przegrzewaniu laptopa i redukuje piki obciążenia CPU z 40% do 10–18%.
    - Zaktualizowano rekomendacje sprzętowe w `get_recommended_profile()`.
 
-4. **Przyspieszenie Renderowania UI:**
+4. **Przyspieszenie Renderowania UI & Synchronizacja Ustawień:**
    - Skrócono interwał dławienia odświeżania podglądu transkrypcji w `recorder/core/rolling_transcriber.py` z 1.5s do 0.35s przy pustej kolejce.
+   - Zaktualizowano okno dialogowe ustawień (`recorder/ui/settings_dialog.py`) o domyślny wybór Beam Size = 1 (Błyskawiczny / Whisper Flow).
+   - Dostosowano zestaw testów jednostkowych (`tests/test_long_session_8h.py`) do jawnego weryfikowania adaptacyjnego biegu turbo z dynamicznym obniżaniem beam size.
 
 5. **Dokumentacja i Plany:**
    - Utworzono dokument architektoniczny `ARCHITECTURE.md` ze schematem Mermaid.

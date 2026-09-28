@@ -285,13 +285,14 @@ def test_adaptive_beam_size_under_load():
     worker.transcriber._model.transcribe = mock_transcribe
 
     from unittest.mock import patch
-    with patch("recorder.core.rolling_transcriber.is_adaptive_beam_size", return_value=True):
-        # 1. Kolejka z 1 blokiem lub pusta -> normalny beam_size (domyślnie > 1 z config)
+    with patch("recorder.core.rolling_transcriber.is_adaptive_beam_size", return_value=True), \
+         patch("recorder.core.rolling_transcriber.get_beam_size", return_value=5):
+        # 1. Kolejka z 1 blokiem lub pusta -> normalny beam_size (w teście ustawiony na 5)
         dummy_audio = np.zeros(16000 * 2, dtype=np.float32)
         block_normal = RollingBlock(1, 0.0, 2.0, dummy_audio)
         worker._process_single_block(block_normal)
         assert len(captured_beam_sizes) == 1
-        assert captured_beam_sizes[0] > 1, f"Oczekiwano domyślnego beam_size > 1, otrzymano {captured_beam_sizes[0]}"
+        assert captured_beam_sizes[0] == 5, f"Oczekiwano bazowego beam_size 5, otrzymano {captured_beam_sizes[0]}"
 
         # 2. Kolejka z > 1 blokami (spiętrzenie w kolejce pod obciążeniem)
         captured_beam_sizes.clear()

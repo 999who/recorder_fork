@@ -204,9 +204,9 @@ class SettingsDialog(QDialog):
         beam_row.addWidget(lbl_beam)
 
         self.combo_beam = QComboBox()
-        self.combo_beam.addItem("⚡ Szybki (Beam Size = 1) - minimalne użycie CPU", 1)
+        self.combo_beam.addItem("⚡ Błyskawiczny / Whisper Flow (Beam Size = 1) [Domyślny]", 1)
         self.combo_beam.addItem("⚖️ Zrównoważony (Beam Size = 3) - dobry balans", 3)
-        self.combo_beam.addItem("🚀 Maksymalna Dokładność (Beam Size = 5) [Zalecany]", 5)
+        self.combo_beam.addItem("🚀 Maksymalna Dokładność (Beam Size = 5)", 5)
         beam_row.addWidget(self.combo_beam)
         whisper_layout.addLayout(beam_row)
 
@@ -875,7 +875,7 @@ class SettingsDialog(QDialog):
 
         # Słownik i AI
         self.txt_keywords.setPlainText(st.get("custom_keywords", ""))
-        beam_val = int(st.get("whisper_beam_size", 5))
+        beam_val = int(st.get("whisper_beam_size", 1))
         idx = self.combo_beam.findData(beam_val)
         if idx != -1:
             self.combo_beam.setCurrentIndex(idx)
@@ -997,7 +997,7 @@ class SettingsDialog(QDialog):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.txt_keywords.setPlainText(self.PRESET_KEYWORDS_IT)
-            self.combo_beam.setCurrentIndex(self.combo_beam.findData(5))
+            self.combo_beam.setCurrentIndex(self.combo_beam.findData(1))
             self.combo_default_source_mode.setCurrentIndex(self.combo_default_source_mode.findData(RecordSourceMode.HYBRID_DUAL))
             self.slider_vad.setValue(42)
             self.slider_vad_sys.setValue(42)
@@ -1016,7 +1016,7 @@ class SettingsDialog(QDialog):
         """Zapisuje wartości do pliku user_settings.json i zamyka dialog."""
         new_settings = {
             "custom_keywords": self.txt_keywords.toPlainText().strip(),
-            "whisper_beam_size": int(self.combo_beam.currentData() or 5),
+            "whisper_beam_size": int(self.combo_beam.currentData() or 1),
             "adaptive_beam_size": self.chk_adaptive_beam.isChecked(),
             "hf_token": self.txt_hf_token.text().strip(),
             "record_source_mode": self.combo_default_source_mode.currentData() or RecordSourceMode.HYBRID_DUAL,
