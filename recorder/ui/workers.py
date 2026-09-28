@@ -684,12 +684,12 @@ class SmartAudioWorker(QThread):
                                     sil_dur = self.sys_silence_samples / 16000.0
 
                                     is_ready = (
-                                        (cur_dur >= 6.0 and sil_dur >= 0.5) or
-                                        (cur_dur >= 14.0 and sil_dur >= 0.3) or
-                                        (cur_dur >= 25.0) or
-                                        (cur_dur >= 2.0 and self.state == SmartRecordState.AUTO_PAUSED)
+                                        (cur_dur >= self.MIN_BLOCK_DURATION_SEC and sil_dur >= self.SAFE_SILENCE_CUT_THRESHOLD_SEC) or
+                                        (cur_dur >= 4.5 and sil_dur >= 0.18) or
+                                        (cur_dur >= self.MAX_BLOCK_DURATION_SEC) or
+                                        (cur_dur >= 1.0 and self.state == SmartRecordState.AUTO_PAUSED)
                                     )
-                                    if is_ready and cur_dur >= 1.5:
+                                    if is_ready and cur_dur >= 0.9:
                                         arr = np.concatenate(self.current_sys_block_chunks)
                                         self.current_sys_block_chunks = []
                                         self.sys_silence_samples = 0
@@ -819,12 +819,12 @@ class SmartAudioWorker(QThread):
                                     sil_dur = self.mic_silence_samples / 16000.0
 
                                     is_ready = (
-                                        (cur_dur >= 6.0 and sil_dur >= 0.5) or
-                                        (cur_dur >= 14.0 and sil_dur >= 0.3) or
-                                        (cur_dur >= 25.0) or
-                                        (cur_dur >= 2.0 and self.state == SmartRecordState.AUTO_PAUSED)
+                                        (cur_dur >= self.MIN_BLOCK_DURATION_SEC and sil_dur >= self.SAFE_SILENCE_CUT_THRESHOLD_SEC) or
+                                        (cur_dur >= 4.5 and sil_dur >= 0.18) or
+                                        (cur_dur >= self.MAX_BLOCK_DURATION_SEC) or
+                                        (cur_dur >= 1.0 and self.state == SmartRecordState.AUTO_PAUSED)
                                     )
-                                    if is_ready and cur_dur >= 1.5:
+                                    if is_ready and cur_dur >= 0.9:
                                         block_arr = np.concatenate(self.current_mic_block_chunks)
                                         self.current_mic_block_chunks = []
                                         self.mic_silence_samples = 0

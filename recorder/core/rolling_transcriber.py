@@ -370,7 +370,7 @@ class RollingTranscriptionWorker(QThread):
 
         # Tryb Catch-up i buforowanie renderowania UI:
         # Jeśli w kolejce czeka wiele bloków, nie zamrażamy interfejsu i CPU renderowaniem wielomegabajtowego HTML.
-        should_render_ui = (is_queue_empty and (now_ts - self._last_ui_render_time >= 1.5)) or (now_ts - self._last_ui_render_time >= 3.0) or not self._cached_html
+        should_render_ui = (is_queue_empty and (now_ts - self._last_ui_render_time >= 0.35)) or (now_ts - self._last_ui_render_time >= 2.0) or not self._cached_html
         if should_render_ui:
             self._last_ui_render_time = now_ts
             full_html, full_plain, all_turns = self._compile_full_transcript()
