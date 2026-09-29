@@ -11,7 +11,8 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional, Tuple
 
 from PySide6.QtCore import (
-    Qt, QTimer, Signal, QPoint, QPropertyAnimation, QEasingCurve, QRectF, QSize
+    Qt, QTimer, Signal, QPoint, QPropertyAnimation, QEasingCurve, QRectF, QSize,
+    QVariantAnimation, QElapsedTimer, QRect
 )
 from PySide6.QtGui import QColor, QPainter, QPen, QFont
 from PySide6.QtWidgets import (
@@ -283,6 +284,10 @@ class RecordDock(QFrame):
         self.lbl_time.setObjectName("DockTime")
         self.lbl_time.setMinimumWidth(58)
 
+        self.lbl_progress = QLabel("", self)
+        self.lbl_progress.setObjectName("DockProgress")
+        self.lbl_progress.hide()
+
         self.sep1 = QFrame(self)
         self.sep1.setObjectName("DockSeparator")
         self.sep1.setFixedSize(1, 24)
@@ -306,6 +311,7 @@ class RecordDock(QFrame):
         lay.addSpacing(4)
         lay.addWidget(self.dot)
         lay.addWidget(self.lbl_time)
+        lay.addWidget(self.lbl_progress)
         lay.addWidget(self.sep1)
         lay.addWidget(self.ch_mic)
         lay.addWidget(self.ch_sys)
@@ -331,6 +337,7 @@ class RecordDock(QFrame):
         processing = mode == "processing"
         for w in (self.sep1, self.ch_mic, self.ch_sys, self.sep2, self.btn_pause, self.btn_stop):
             w.setVisible(not processing)
+        self.lbl_progress.setVisible(not processing and getattr(self, "_progress", None) is not None)
         if processing:
             self.lbl_time.setText(text or "Kończę transkrypcję…")
             self.lbl_time.setProperty("processing", "true")
@@ -346,6 +353,17 @@ class RecordDock(QFrame):
             self.btn_pause.setToolTip("Wstrzymaj nagrywanie")
         if mode not in ("recording",):
             self.dot.set_ring(0.0)
+        self.adjustSize()
+
+    def set_progress(self, percent: Optional[int], detail: str = "") -> None:
+        """Procent transkrypcji w tle obok zegara; pełny opis w podpowiedzi."""
+        self._progress = percent
+        self.lbl_progress.setToolTip(detail)
+        if percent is None:
+            self.lbl_progress.hide()
+        else:
+            self.lbl_progress.setText(f"{max(0, min(100, int(percent)))}%")
+            self.lbl_progress.setVisible(self._mode != "processing")
         self.adjustSize()
 
     def set_time(self, text: str) -> None:
@@ -919,3 +937,124 @@ def _combined_icon(names: Tuple[str, ...], color: str):
     p.end()
     pix.setDevicePixelRatio(2.0)
     return QIcon(pix)
+
+
+class TypingDots(QWidget):
+    """
+    Trzy kropki unoszące się falą, jak „ktoś pisze” w czacie. Pokazywane w miejscu następnej
+    wypowiedzi, dopóki mowa czeka na rozpoznanie. Timer działa tylko wtedy, gdy kropki są widoczne,
+    a odświeżany jest wyłącznie ten mały obszar, więc animacja praktycznie nie obciąża procesora.
+    """
+
+    DOTS = 3
+    RADIUS = 3.0
+    GAP = 9.0
+    PERIOD_MS = 1300.0
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.setFixedSize(int(self.GAP * (self.DOTS - 1) + self.RADIUS * 2 + 8), 22)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setToolTip("")
+        self._clock = QElapsedTimer()
+        self._timer = QTimer(self)
+        self._timer.setInterval(33)
+        self._timer.timeout.connect(self.update)
+        self._active = False
+        self.hide()
+
+    def is_active(self) -> bool:
+        return self._active
+
+    def set_active(self, active: bool) -> None:
+        active = bool(active)
+        if active == self._active:
+            return
+        self._active = active
+        if active:
+            self._clock.start()
+            self.show()
+            self.raise_()
+            self._timer.start()
+        else:
+            self._timer.stop()
+            self.hide()
+
+    def hideEvent(self, event):
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def showEvent(self, event):
+        if self._active and not self._timer.isActive():
+            self._timer.start()
+        super().showEvent(event)
+
+    def paintEvent(self, event):
+        import math
+        t = current_tokens()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        elapsed = self._clock.elapsed() if self._clock.isValid() else 0
+        phase = (elapsed % self.PERIOD_MS) / self.PERIOD_MS * 2 * math.pi
+        base_y = self.height() / 2.0 + 2.0
+        color = QColor(t.text_secondary)
+        for i in range(self.DOTS):
+            # Każda kropka jest opóźniona względem poprzedniej, co daje efekt fali
+            wave = max(0.0, math.sin(phase - i * 0.9))
+            lift = wave * 4.5
+            color.setAlphaF(0.35 + 0.65 * wave)
+            p.setBrush(color)
+            cx = 4.0 + self.RADIUS + i * self.GAP
+            p.drawEllipse(QRectF(cx - self.RADIUS, base_y - lift - self.RADIUS, self.RADIUS * 2, self.RADIUS * 2))
+        p.end()
+
+
+class RowFadeIn(QWidget):
+    """
+    Nakładka na obszar nowej wypowiedzi: zaczyna w kolorze tła arkusza i w krótkiej animacji
+    staje się przezroczysta, dzięki czemu nowy tekst płynnie się pojawia.
+    """
+
+    DURATION_MS = 420
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._opacity = 0.0
+        self._color = QColor(0, 0, 0)
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(self.DURATION_MS)
+        self._anim.setStartValue(1.0)
+        self._anim.setEndValue(0.0)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(self._on_value)
+        self._anim.finished.connect(self.hide)
+        self.hide()
+
+    def play(self, rect: QRect, color: str) -> None:
+        if rect.isEmpty():
+            return
+        self._color = QColor(color)
+        self.setGeometry(rect)
+        self._opacity = 1.0
+        self.show()
+        self.raise_()
+        self._anim.stop()
+        self._anim.start()
+
+    def is_running(self) -> bool:
+        return self._anim.state() == QVariantAnimation.State.Running
+
+    def _on_value(self, value):
+        self._opacity = float(value)
+        self.update()
+
+    def paintEvent(self, event):
+        if self._opacity <= 0.0:
+            return
+        p = QPainter(self)
+        c = QColor(self._color)
+        c.setAlphaF(self._opacity)
+        p.fillRect(self.rect(), c)
+        p.end()

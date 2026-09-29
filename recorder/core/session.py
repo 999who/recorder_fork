@@ -61,8 +61,8 @@ def render_turn_rows_html(rows: List[Tuple]) -> str:
         style = f" style='color: {color};'" if color else ""
         parts.append(
             "<tr>"
-            f"<td class='t' valign='top'>{escape(time_label)}</td>"
-            f"<td class='{spk_class}' valign='top'{style}>{escape(spk.upper())}</td>"
+            f"<td class='t' valign='top' width='1%'>{escape(time_label)}</td>"
+            f"<td class='{spk_class}' valign='top' width='1%'{style}>{escape(spk.upper())}</td>"
             f"<td class='x' valign='top'>{escape(text)}</td>"
             "</tr>"
         )

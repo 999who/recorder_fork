@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger("recorder.ui.window")
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal, QByteArray, QDataStream, QEvent, QSize
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal, QByteArray, QDataStream, QEvent, QSize, QRect
 from PySide6.QtGui import QFont, QDesktopServices, QIcon, QPixmap, QPainter, QColor, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -558,6 +558,18 @@ class SmartDictaphoneWindow(QMainWindow):
         self.text_transcript.setFrameShape(QFrame.Shape.NoFrame)
         self.text_transcript.setPlaceholderText("Tutaj pojawi się transkrypcja.")
         self.body_stack.addWidget(self.text_transcript)
+
+        # Animacje podglądu na żywo: kropki „pisze…” w miejscu następnej wypowiedzi
+        # oraz płynne pojawianie się nowych wierszy
+        from recorder.ui.widgets import TypingDots, RowFadeIn
+        self.typing_dots = TypingDots(self.text_transcript.viewport())
+        self.row_fade = RowFadeIn(self.text_transcript.viewport())
+        self._live_slot = False
+        self._live_slot_pending = False
+        self._last_is_speech = False
+        self.text_transcript.document().contentsChanged.connect(self._schedule_live_slot)
+        self.text_transcript.verticalScrollBar().valueChanged.connect(self._position_typing_dots)
+        self.text_transcript.viewport().installEventFilter(self)
         sheet_layout.addWidget(self.body_stack, stretch=1)
 
         # Pasek nagrywania pod tekstem (pływający panel lub przycisk startu)
@@ -629,6 +641,7 @@ class SmartDictaphoneWindow(QMainWindow):
 
     def _show_idle_view(self, show_text: Optional[bool] = None) -> None:
         """Stan gotowości: przycisk nagrywania, bez panelu nagrywania."""
+        self._set_live_slot(False)
         if show_text is None:
             show_text = self._has_transcript()
         self.dock.hide()
@@ -646,7 +659,9 @@ class SmartDictaphoneWindow(QMainWindow):
         self.doc_header.show()
         self.dock.set_mode("recording")
         self.dock.reset_levels()
+        self.dock.set_progress(None)
         self.dock.show()
+        self._set_live_slot(True)
 
     def _show_processing_view(self, text: str) -> None:
         self.btn_start.hide()
@@ -654,23 +669,27 @@ class SmartDictaphoneWindow(QMainWindow):
         self.doc_header.show()
         self.dock.set_mode("processing", text)
         self.dock.show()
+        self._set_live_slot(False)
 
     def _set_doc_header(self, title: str, base_meta: str = "") -> None:
         self.lbl_doc_title.setText(title)
         self._doc_base_meta = base_meta
         self.lbl_doc_meta.setText(base_meta)
+        self.lbl_doc_meta.setVisible(bool(base_meta))
 
     def _on_progress_changed(self, value: int, text: str) -> None:
-        """Postęp transkrypcji trafia do opisu pod tytułem i do panelu przetwarzania."""
+        """Postęp transkrypcji w tle pokazujemy jako procent w panelu nagrywania (pełny opis w podpowiedzi)."""
         from recorder.ui.settings_dialog import strip_leading_symbols
         clean = strip_leading_symbols(text or "")
-        if self.dock.isVisible() and self.dock.mode() == "processing":
+        if not self.dock.isVisible():
+            return
+        if self.dock.mode() == "processing":
             self.dock.set_processing_text(clean or "Przetwarzanie…")
-        base = self._doc_base_meta
-        if not clean or value >= 100 or clean.startswith("Oczekiwanie"):
-            self.lbl_doc_meta.setText(base)
+            return
+        if value > 0:
+            self.dock.set_progress(value, clean)
         else:
-            self.lbl_doc_meta.setText(f"{base} · {clean}" if base else clean)
+            self.dock.set_progress(None, clean)
 
     @staticmethod
     def _format_clock(seconds: int) -> str:
@@ -760,9 +779,101 @@ class SmartDictaphoneWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Nakładki: historia i powiadomienia chmury
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Podgląd na żywo: miejsce na następną wypowiedź, kropki „pisze…”, pojawianie się wierszy
+    # ------------------------------------------------------------------
+    LIVE_SLOT_PX = 40
+
+    def _newest_first(self) -> bool:
+        from recorder.config import get_preview_order
+        try:
+            return get_preview_order() != "chronological"
+        except Exception:
+            return True
+
+    def _set_live_slot(self, on: bool) -> None:
+        self._live_slot = bool(on)
+        if not on:
+            self._set_typing(False)
+        self._apply_live_slot()
+
+    def _schedule_live_slot(self) -> None:
+        # setHtml() odtwarza dokument, więc margines na następną wypowiedź trzeba przywrócić
+        if not self._live_slot_pending:
+            self._live_slot_pending = True
+            QTimer.singleShot(0, self._apply_live_slot)
+
+    def _apply_live_slot(self) -> None:
+        self._live_slot_pending = False
+        doc = self.text_transcript.document()
+        root = doc.rootFrame()
+        fmt = root.frameFormat()
+        margin = doc.documentMargin()
+        newest_first = self._newest_first()
+        top = margin + (self.LIVE_SLOT_PX if self._live_slot and newest_first else 0)
+        bottom = margin + (self.LIVE_SLOT_PX if self._live_slot and not newest_first else 0)
+        if fmt.topMargin() != top or fmt.bottomMargin() != bottom:
+            fmt.setTopMargin(top)
+            fmt.setBottomMargin(bottom)
+            root.setFrameFormat(fmt)
+        self._position_typing_dots()
+
+    def _transcript_table(self):
+        from PySide6.QtGui import QTextTable
+        for frame in self.text_transcript.document().rootFrame().childFrames():
+            if isinstance(frame, QTextTable):
+                return frame
+        return None
+
+    def _position_typing_dots(self, *_args) -> None:
+        dots = getattr(self, "typing_dots", None)
+        if dots is None or not dots.is_active():
+            return
+        doc = self.text_transcript.document()
+        margin = doc.documentMargin()
+        scroll = self.text_transcript.verticalScrollBar().value()
+        x = int(margin)
+        table = self._transcript_table()
+        if table is not None and table.rows() > 0 and table.columns() >= 3:
+            x = self.text_transcript.cursorRect(table.cellAt(0, 2).firstCursorPosition()).left()
+        offset = (self.LIVE_SLOT_PX - dots.height()) / 2.0
+        if self._newest_first():
+            y = margin + offset - scroll
+        else:
+            y = doc.size().height() - margin - self.LIVE_SLOT_PX + offset - scroll
+        dots.move(max(0, x - 4), int(y))
+
+    def _set_typing(self, on: bool) -> None:
+        on = bool(on) and self._live_slot
+        self.typing_dots.set_active(on)
+        if on:
+            self._position_typing_dots()
+
+    def _play_new_rows_fade(self, old_rows: int) -> None:
+        table = self._transcript_table()
+        if table is None:
+            return
+        rows = table.rows()
+        added = rows - old_rows
+        if added <= 0 or added > 6:
+            return
+        if self._newest_first():
+            first, last = 0, added - 1
+        else:
+            first, last = rows - added, rows - 1
+        top = self.text_transcript.cursorRect(table.cellAt(first, 0).firstCursorPosition()).top() - 6
+        bottom = self.text_transcript.cursorRect(table.cellAt(last, 2).lastCursorPosition()).bottom() + 10
+        vp = self.text_transcript.viewport()
+        rect = QRect(0, top, vp.width(), max(0, bottom - top)).intersected(vp.rect())
+        from recorder.ui.widgets import current_tokens
+        self.row_fade.play(rect, current_tokens().bg_surface)
+        self.typing_dots.raise_()
+
     def eventFilter(self, obj, event):
         if obj is getattr(self, "_main_widget", None) and event.type() == QEvent.Type.Resize:
             self._reposition_overlays()
+        elif event.type() == QEvent.Type.Resize and hasattr(self, "typing_dots") and obj is self.text_transcript.viewport():
+            self._position_typing_dots()
         return super().eventFilter(obj, event)
 
     def _reposition_overlays(self) -> None:
@@ -1105,7 +1216,7 @@ class SmartDictaphoneWindow(QMainWindow):
         )
 
         from recorder.ui.widgets import polish_date_title
-        self._set_doc_header(polish_date_title(now), self._model_short_name(selected_model))
+        self._set_doc_header(polish_date_title(now))
         self.text_transcript.setHtml(
             "<p class='hint'>Słucham. Pierwsze zdania pojawią się tutaj po kilku sekundach mowy.</p>"
         )
@@ -1164,8 +1275,14 @@ class SmartDictaphoneWindow(QMainWindow):
         self.current_turns = all_turns or []
         self.last_plain_text = full_plain
         if full_html:
+            table = self._transcript_table()
+            old_rows = table.rows() if table is not None else 0
             self.text_transcript.setHtml(full_html)
             self._scroll_transcript_view()
+            self._apply_live_slot()
+            if not self._last_is_speech:
+                self._set_typing(False)
+            QTimer.singleShot(30, lambda: self._play_new_rows_fade(old_rows))
 
 
         # Transmisja na żywo nowych segmentów do Supabase / CRM
@@ -1357,7 +1474,7 @@ class SmartDictaphoneWindow(QMainWindow):
         self.text_transcript.setHtml(
             "<p class='hint'>Przetwarzam plik. Tekst pojawi się tutaj, gdy będą gotowe pierwsze fragmenty.</p>"
         )
-        self._set_doc_header(filename, self._model_short_name(selected_model))
+        self._set_doc_header(filename)
         self._show_processing_view("Przygotowuję plik…")
         self.progress_transcription.setValue(0)
         self.progress_transcription.setFormat(f"Przygotowuję plik {filename}")
@@ -1710,7 +1827,7 @@ class SmartDictaphoneWindow(QMainWindow):
         self._last_active_tick = None
         self.dock.set_time("00:00")
         from recorder.ui.widgets import polish_date_title
-        self._set_doc_header(polish_date_title(split_now), self._model_short_name(getattr(self, "_active_model_id", None)))
+        self._set_doc_header(polish_date_title(split_now))
         self.text_transcript.setHtml("<p class='hint'>Rozpoczęto nowe spotkanie. Poprzednia sesja została zapisana automatycznie.</p>")
 
         # 5. Start nowej sesji w Supabase
@@ -1881,6 +1998,9 @@ class SmartDictaphoneWindow(QMainWindow):
         state = self.worker.state
         if state in (SmartRecordState.MANUAL_PAUSED, SmartRecordState.AUTO_PAUSED, SmartRecordState.STOPPED):
             return
+        self._last_is_speech = bool(is_speech)
+        if is_speech and not self.typing_dots.is_active():
+            self._set_typing(True)
         try:
             threshold = self._auto_pause_seconds()
             if current_silence_sec is None or current_silence_sec != current_silence_sec:
@@ -1900,10 +2020,12 @@ class SmartDictaphoneWindow(QMainWindow):
             self.dock.setToolTip("")
             self._update_tray_tooltip("Nagrywanie trwa")
         elif state == SmartRecordState.AUTO_PAUSED:
+            self._set_typing(False)
             self.dock.set_mode("autopaused")
             self.dock.setToolTip(f"Auto-pauza: brak mowy dłużej niż {self._auto_pause_seconds():.0f} s")
             self._update_tray_tooltip("Wstrzymano (cisza)")
         elif state == SmartRecordState.MANUAL_PAUSED:
+            self._set_typing(False)
             self.dock.set_mode("manualpaused")
             self.dock.setToolTip("Nagrywanie wstrzymane")
             self._update_tray_tooltip("Wstrzymano ręcznie")

@@ -1659,6 +1659,12 @@ def generate_theme_qss(
         color: {t.text_primary};
         padding: 0px 10px 0px 2px;
     }}
+    QLabel#DockProgress {{
+        font-size: 12px;
+        font-weight: 600;
+        color: {t.text_muted};
+        padding: 0px 6px 0px 0px;
+    }}
     QFrame#DockSeparator {{
         background-color: {t.border_strong};
         border: none;

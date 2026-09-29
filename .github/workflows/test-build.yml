@@ -1,10 +1,8 @@
 name: Test Build (Parakeet, nowy wygląd)
 
 # Wersja testowa do wypróbowania zmian z gałęzi, bez publikowania wydania.
+# Uruchamiana tylko ręcznie (Actions → Run workflow); na co dzień budujemy lokalnie.
 on:
-  push:
-    branches:
-      - 'feat/ui-dark-notebook'
   workflow_dispatch:
 
 permissions:
