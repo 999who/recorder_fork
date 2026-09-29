@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional
 
+from recorder.flavor import WHISPER_ENABLED, UPDATES_ENABLED
+
 # Wyciszenie ostrzeżeń o symlinkach HuggingFace na Windowsie
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
@@ -95,6 +97,8 @@ ASR_MODELS = {
     },
     **WHISPER_MODELS,
 }
+if not WHISPER_ENABLED:
+    ASR_MODELS = {PARAKEET_MODEL_ID: ASR_MODELS[PARAKEET_MODEL_ID]}
 
 
 def get_env_variable(key: str, default: str = "") -> str:
@@ -329,6 +333,8 @@ def is_replacements_for_whisper() -> bool:
 
 def get_asr_engine() -> str:
     """Zwraca aktywny silnik rozpoznawania mowy: 'parakeet' lub 'whisper' (bez ustawienia: Parakeet bez CUDA)."""
+    if not WHISPER_ENABLED:
+        return "parakeet"
     eid = str(load_user_settings().get("asr_engine", "")).strip().lower()
     if eid in ("parakeet", "whisper"):
         return eid
@@ -556,6 +562,8 @@ def get_cloud_sync_config() -> dict:
 
 def is_auto_check_updates_startup() -> bool:
     """Sprawdza, czy włączone jest ciche sprawdzanie aktualizacji przy uruchomieniu programu."""
+    if not UPDATES_ENABLED:
+        return False
     st = load_user_settings()
     return bool(st.get("auto_check_updates_startup", True))
 

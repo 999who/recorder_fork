@@ -7,6 +7,7 @@
 - Silero VAD na onnxruntime (bez torch); sprawdzanie CUDA przez ctranslate2.
 - Usunięto diaryzację (pyannote, UI, ustawienia), torch, torchaudio i PyQt6.
 - Komunikaty pobierania modelu w UI, opcja lokalnego folderu z modelem; build EXE bez torch z weryfikacją paczki.
+- Wariant testowy `build_exe.py --variant parakeet-test`: osobna nazwa exe i identyfikator Windows (instalacja obok głównej), bez Whispera i aktualizacji (`recorder/flavor.py`).
 - `scripts/bench_asr.py`: pomiar czasu bloków, RTF, CPU i RAM dla obu silników.
 
 ---

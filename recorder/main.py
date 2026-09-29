@@ -23,8 +23,9 @@ def main():
     setup_windows_app_identity()
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Inteligentny Dyktafon AI")
-    app.setApplicationDisplayName("Inteligentny Dyktafon AI")
+    from recorder.flavor import APP_NAME
+    app.setApplicationName(APP_NAME)
+    app.setApplicationDisplayName(APP_NAME)
 
     ico_path = get_app_icon_path("ico")
     if ico_path and os.path.exists(ico_path):

@@ -1,7 +1,9 @@
 """
 Skrypt budowania aplikacji Inteligentnego Dyktafonu AI do wersji .EXE (Windows).
 Użycie:
-    python scripts/build_exe.py
+    python scripts/build_exe.py                        # wersja pełna (Parakeet + Whisper)
+    python scripts/build_exe.py --variant parakeet-test  # wersja testowa obok głównej: własna nazwa exe,
+                                                        # bez Whispera, bez automatycznych aktualizacji
 """
 
 import os
@@ -22,6 +24,22 @@ if sys.platform == "win32":
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENTRY_POINT = os.path.join(ROOT_DIR, "run.py")
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
+
+# Warianty budowania: nazwa folderu/exe, moduły do pominięcia i zawartość flavor.json (patrz recorder/flavor.py)
+VARIANTS = {
+    "": {"name": "InteligentnyDyktafonAI", "exclude": [], "flavor": None},
+    "parakeet-test": {
+        "name": "InteligentnyDyktafonAI-ParakeetTest",
+        "exclude": ["faster_whisper", "ctranslate2"],
+        "flavor": {
+            "id": "parakeet-test",
+            "app_id": "InteligentnyDyktafonAI.ParakeetTest",
+            "app_name": "Inteligentny Dyktafon AI (Parakeet TEST)",
+            "whisper": False,
+            "updates": False,
+        },
+    },
+}
 BUILD_DIR = os.path.join(ROOT_DIR, "build")
 LOG_FILE = os.path.join(ROOT_DIR, "build_log.txt")
 
@@ -85,7 +103,7 @@ def get_site_packages_modules() -> list[str]:
     return sorted(list(modules))
 
 
-def verify_bundle(output_folder: str) -> bool:
+def verify_bundle(output_folder: str, expect_whisper: bool = True) -> bool:
     """
     Sprawdza paczkę po kompilacji: musi zawierać onnxruntime i model Silero VAD (ONNX),
     a nie powinna zawierać torch. Brak którejś z wymaganych rzeczy przerywa build z błędem.
@@ -106,12 +124,23 @@ def verify_bundle(output_folder: str) -> bool:
     print(f"   torch (niepotrzebny): {'OBECNY - usuń torch ze środowiska budowania' if has_torch else 'brak (OK)'}")
 
     ok = has_ort and has_onnx_asr and has_vad
+    has_whisper = os.path.isdir(os.path.join(root, "faster_whisper"))
+    if not expect_whisper:
+        print(f"   faster_whisper (wariant bez Whispera): {'OBECNY - powinno go nie być' if has_whisper else 'brak (OK)'}")
+        ok = ok and not has_whisper
     if has_torch:
         print("⚠️ W paczce jest torch. Zbuduj z czystego środowiska: pip install -r requirements.txt")
     return ok
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--variant", default="", choices=sorted(VARIANTS), help="wariant budowania (domyślnie pełny)")
+    args = ap.parse_args()
+    variant = VARIANTS[args.variant]
+    app_name = variant["name"]
+
     # Inicjalizacja automatycznego zapisu logu do pliku build_log.txt
     tee = TeeLogger(LOG_FILE, sys.stdout)
     sys.stdout = tee
@@ -169,6 +198,7 @@ def main():
     ]
 
     # Połącz moduły AI oraz moduły z site-packages
+    core_ai_collect = [pkg for pkg in core_ai_collect if pkg not in variant["exclude"]]
     modules_to_collect = sorted(list(set([pkg for pkg in core_ai_collect if _is_module_available(pkg.split('.')[0])])))
 
     # Weryfikacja obecności zasobów czcionek (Saira SIL OFL)
@@ -193,7 +223,7 @@ def main():
     # 4. Przygotuj parametry PyInstallera
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name=InteligentnyDyktafonAI",
+        f"--name={app_name}",
         "--onedir",                       # Folder z plikami DLL (najstabilniejszy dla modeli onnxruntime/ctranslate2)
         "--clean",
         "--noconfirm",
@@ -208,6 +238,7 @@ def main():
         "--exclude-module=PyQt6_sip",
         "--exclude-module=torch",
         "--exclude-module=torchaudio",
+        *[f"--exclude-module={m}" for m in variant["exclude"]],
 
         # Zbieranie zależności i bibliotek C++/DLL dla wszystkich modułów AI
         *[
@@ -233,6 +264,7 @@ def main():
             f"--copy-metadata={dist_name}"
             for dist_name in all_dists
             if not dist_name.lower().startswith("pyqt6")
+            and dist_name.lower().replace("_", "-") not in [m.replace("_", "-") for m in variant["exclude"]]
         ],
         
         # Bezpieczne dołączenie pliku przykładowego .env.example (zamiast prywatnego .env)
@@ -253,8 +285,8 @@ def main():
     result = subprocess.run(cmd, cwd=ROOT_DIR)
 
     if result.returncode == 0:
-        output_folder = os.path.join(DIST_DIR, "InteligentnyDyktafonAI")
-        exe_path = os.path.join(output_folder, "InteligentnyDyktafonAI.exe")
+        output_folder = os.path.join(DIST_DIR, app_name)
+        exe_path = os.path.join(output_folder, f"{app_name}.exe")
         
         # Bezpieczne skopiowanie czystego .env.example oraz README do folderu wyjściowego
         example_src = os.path.join(ROOT_DIR, ".env.example")
@@ -277,7 +309,13 @@ def main():
             except Exception:
                 pass
 
-        if not verify_bundle(output_folder):
+        if variant["flavor"]:
+            import json
+            with open(os.path.join(output_folder, "flavor.json"), "w", encoding="utf-8") as f:
+                json.dump(variant["flavor"], f, ensure_ascii=False, indent=2)
+            print(f"✅ Zapisano flavor.json (wariant: {args.variant}).")
+
+        if not verify_bundle(output_folder, expect_whisper=not variant["exclude"]):
             print("\n❌ Paczka jest niekompletna (patrz lista powyżej).")
             sys.exit(1)
 

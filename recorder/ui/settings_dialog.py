@@ -17,6 +17,8 @@ from recorder.config import (
     load_user_settings,
     save_user_settings,
     WHISPER_MODELS,
+    WHISPER_ENABLED,
+    UPDATES_ENABLED,
     DEFAULT_WHISPER_MODEL,
     RecordSourceMode,
     APP_VERSION,
@@ -235,9 +237,11 @@ class SettingsDialog(QDialog):
         engine_layout = QFormLayout(box_engine)
 
         self.combo_engine = QComboBox()
-        self.combo_engine.addItem("Automatycznie (Parakeet bez karty NVIDIA, Whisper z CUDA)", "")
+        if WHISPER_ENABLED:
+            self.combo_engine.addItem("Automatycznie (Parakeet bez karty NVIDIA, Whisper z CUDA)", "")
         self.combo_engine.addItem("🦜 Parakeet TDT 0.6B v3 (CPU, onnxruntime)", "parakeet")
-        self.combo_engine.addItem("Whisper (faster-whisper)", "whisper")
+        if WHISPER_ENABLED:
+            self.combo_engine.addItem("Whisper (faster-whisper)", "whisper")
         engine_layout.addRow("Silnik:", self.combo_engine)
 
         self.combo_onnx_threads = QComboBox()
@@ -695,6 +699,9 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(scroll, "🚀 Aktualizacje")
 
     def _on_check_updates_clicked(self):
+        if not UPDATES_ENABLED:
+            self.lbl_update_status.setText("Aktualizacje są wyłączone w wersji testowej (Parakeet TEST).")
+            return
         self.btn_check_updates.setEnabled(False)
         self.lbl_update_status.setText("⏳ Sprawdzanie wydań na GitHubie...")
         self.lbl_update_status.setStyleSheet("color: #4cc9f0; font-size: 11px;")

@@ -74,6 +74,7 @@ from recorder.core.session import (
     get_turn_sync_id
 )
 from recorder.core.cloud_sync import CloudSyncManager
+from recorder.flavor import APP_NAME
 
 
 class SilenceToastBanner(QWidget):
@@ -131,7 +132,7 @@ class SilenceToastBanner(QWidget):
             pix = QPixmap(png_icon).scaled(15, 15, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             lbl_app_logo.setPixmap(pix)
             app_header.addWidget(lbl_app_logo)
-        lbl_app_name = QLabel("Inteligentny Dyktafon AI")
+        lbl_app_name = QLabel(APP_NAME)
         lbl_app_name.setObjectName("ToastAppName")
         lbl_app_name.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
         app_header.addWidget(lbl_app_name, stretch=1)
@@ -257,7 +258,7 @@ class SmartDictaphoneWindow(QMainWindow):
     """
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Inteligentny Dyktafon AI - Wykrywanie Mowy (VAD)")
+        self.setWindowTitle(f"{APP_NAME} - Wykrywanie Mowy (VAD)")
         from recorder.ui.windows_integration import get_app_icon_path
         ico = get_app_icon_path("ico")
         if ico and os.path.exists(ico):
@@ -416,7 +417,7 @@ class SmartDictaphoneWindow(QMainWindow):
         header_container = QHBoxLayout()
         
         header_text_layout = QVBoxLayout()
-        title = QLabel("🎙️ Inteligentny Dyktafon AI")
+        title = QLabel(f"🎙️ {APP_NAME}")
         title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignLeft)
         
@@ -2259,7 +2260,7 @@ class SmartDictaphoneWindow(QMainWindow):
                 p.end()
                 icon = QIcon(pix)
             self.tray_icon.setIcon(icon)
-            self.tray_icon.setToolTip("Inteligentny Dyktafon AI — Gotowy")
+            self.tray_icon.setToolTip(f"{APP_NAME} — Gotowy")
             self.tray_icon.messageClicked.connect(self._on_tray_message_clicked)
             self.tray_icon.activated.connect(self._on_tray_icon_activated)
 

@@ -77,6 +77,9 @@ def create_asr_engine(engine_id: Optional[str] = None, model_size: Optional[str]
         from recorder.config import get_asr_engine
         engine_id = get_asr_engine()
     engine_id = normalize_engine_id(engine_id)
+    from recorder.flavor import WHISPER_ENABLED
+    if not WHISPER_ENABLED:
+        engine_id = ENGINE_PARAKEET
     if engine_id == ENGINE_PARAKEET:
         from recorder.config import get_onnx_threads, get_parakeet_model_path
         from recorder.core.parakeet_engine import ParakeetEngine

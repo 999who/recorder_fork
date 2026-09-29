@@ -13,8 +13,7 @@ import subprocess
 import threading
 from typing import Optional
 
-APP_ID = "InteligentnyDyktafonAI"
-APP_NAME = "Inteligentny Dyktafon AI"
+from recorder.flavor import APP_ID, APP_NAME
 
 
 def get_app_icon_path(ext: str = "ico") -> str:
