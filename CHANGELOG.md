@@ -1,3 +1,24 @@
+## [v0.7.3] - 2026-09-29: Przywrócenie Najwyższej Jakości Transkrypcji i Stabilności CPU (Hotfix)
+
+### Wprowadzone zmiany:
+1. **Przywrócenie Pełnej Jakości Języka Polskiego (Beam Size = 5):**
+   - Przywrócono domyślny parametr `whisper_beam_size = 5` (Beam Search) w `recorder/config.py` i w oknie ustawień.
+   - Eliminacja halucynacji (np. tokenów obcojęzycznych na szumie) i przywrócenie poprawnej odmiany przez przypadki w języku polskim.
+
+2. **Przywrócenie Naturalnych Granic Zdaniowych VAD (Eliminacja Ciągłego Obciążenia 25% CPU):**
+   - Wycofano mikrosiekanie bloków co 2 sekundy (które powodowało zator kolejki i mielenie CPU non-stop).
+   - Przywrócono sprawdzone progi cięcia: min. 6.0s z pauzą 0.5s lub 14.0s z pauzą 0.3s (lub max 25s monologu).
+   - Whisper otrzymuje spójne, pełne frazy, a procesor po skończonej transkrypcji natychmiast wraca do 0% CPU (stanu uśpienia).
+
+3. **Przywrócenie Pełnej Wielowątkowości CPU (6 Wątków):**
+   - Dynamiczny przydział wątków roboczych `safe_threads = min(6, total_cores - 1)` dla procesorów AMD Ryzen AI i standardowych procesorów x86.
+   - Maksymalne wykorzystanie instrukcji wektorowych i szybsza transkrypcja każdego bloku.
+
+4. **Stabilizacja Renderowania UI:**
+   - Przywrócono buforowanie odświeżania podglądu transkrypcji na 1.5s w `recorder/core/rolling_transcriber.py`.
+
+---
+
 ## [v0.7.2] - 2026-09-28: Przyspieszenie Transkrypcji do Poziomu Whisper Flow (Latency 1.8s & Optymalizacja AMD Ryzen AI)
 
 ### Wprowadzone zmiany:
