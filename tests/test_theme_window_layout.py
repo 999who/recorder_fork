@@ -36,51 +36,20 @@ def window(qapp):
         pass
 
 
-def test_sources_layout_and_app_row_exact_structure(window):
+def test_top_bar_icon_only_controls(window):
     """
-    Challenge 1: Verify exact layout structure of sources_box and app_row.
-    Confirms:
-    - sources_layout contains exactly 4 row layouts
-    - app_row contains exactly: LblAppInput, combo_target_apps, btn_refresh_apps
-    - No duplicate refresh buttons or duplicate comboboxes
+    Pasek górny: nazwa aplikacji, opis źródeł dźwięku i trzy przyciski z samymi ikonami.
+    Każdy przycisk ma podpowiedź po polsku zamiast tekstu.
     """
-    sources_box = window.combo_source_mode.parentWidget()
-    assert isinstance(sources_box, QGroupBox)
-    sources_layout = sources_box.layout()
-    assert sources_layout is not None
-    assert sources_layout.count() == 4, f"sources_layout should have 4 rows, found {sources_layout.count()}"
-
-    # Row 0: Mode row
-    mode_row = sources_layout.itemAt(0).layout()
-    assert mode_row is not None
-    mode_widgets = [mode_row.itemAt(i).widget() for i in range(mode_row.count()) if mode_row.itemAt(i).widget()]
-    assert any(w.objectName() == "AudioSourceModeLabel" for w in mode_widgets)
-    assert window.combo_source_mode in mode_widgets
-
-    # Row 1: Mic row
-    mic_row = sources_layout.itemAt(1).layout()
-    assert mic_row is not None
-    mic_widgets = [mic_row.itemAt(i).widget() for i in range(mic_row.count()) if mic_row.itemAt(i).widget()]
-    assert window.lbl_mic_input in mic_widgets
-    assert window.combo_devices in mic_widgets
-    assert window.btn_refresh_dev in mic_widgets
-
-    # Row 2: System loopback row
-    sys_row = sources_layout.itemAt(2).layout()
-    assert sys_row is not None
-    sys_widgets = [sys_row.itemAt(i).widget() for i in range(sys_row.count()) if sys_row.itemAt(i).widget()]
-    assert window.lbl_sys_input in sys_widgets
-    assert window.combo_loopback_devices in sys_widgets
-    assert window.btn_refresh_loop in sys_widgets
-
-    # Row 3: App row
-    app_row = sources_layout.itemAt(3).layout()
-    assert app_row is not None
-    app_widgets = [app_row.itemAt(i).widget() for i in range(app_row.count()) if app_row.itemAt(i).widget()]
-    assert len(app_widgets) == 3, f"Expected exactly 3 widgets in app_row, got {len(app_widgets)}"
-    assert app_widgets[0] is window.lbl_app_input
-    assert app_widgets[1] is window.combo_target_apps
-    assert app_widgets[2] is window.btn_refresh_apps
+    assert window.lbl_brand.text()
+    assert window.btn_source_pill.text(), "Opis źródeł dźwięku powinien być widoczny w pasku"
+    for btn in (window.btn_upload, window.btn_history, window.btn_settings):
+        assert btn.text() == "", f"{btn.toolTip()} nie powinien mieć tekstu"
+        assert btn.toolTip()
+        assert not btn.icon().isNull()
+    # Wybór mikrofonu, wyjścia i modelu przeniesiono do ustawień
+    for removed in ("combo_source_mode", "combo_devices", "combo_loopback_devices", "combo_model", "lbl_cloud_status"):
+        assert not hasattr(window, removed), f"{removed} powinien być tylko w ustawieniach"
 
 
 def test_no_orphan_widgets_in_entire_window(window):
@@ -107,9 +76,7 @@ def test_no_duplicate_widgets_across_layouts(window):
     """
     Challenge 3: Traverse entire layout tree and verify no widget is added more than once.
     """
-    scroll_area = window.centralWidget()
-    main_widget = scroll_area.widget()
-    main_layout = main_widget.layout()
+    main_layout = window.centralWidget().layout()
 
     widget_occurrences = {}
 
@@ -175,20 +142,20 @@ def test_no_overlapping_sibling_controls(window):
         assert len(overlaps) == 0, f"Overlapping controls at {w_val}x{h_val}: {overlaps}"
 
 
-def test_vad_state_high_frequency_alternation_stress(window):
+def test_silence_ring_high_frequency_alternation_stress(window):
     """
-    Challenge 5: Stress-test rapid alternating VAD state (speech <-> silence)
-    where unpolish and polish ARE invoked 3,000 times consecutively.
-    Must complete without memory spikes or crashes.
+    Szybkie przełączanie mowa/cisza (pierścień wokół kropki nagrywania) 3000 razy
+    bez skoków pamięci i bez błędów.
     """
     tracemalloc.start()
     gc_before = tracemalloc.take_snapshot()
     start_time = time.perf_counter()
 
+    window.dock.set_mode("recording")
     for i in range(3000):
-        state = "speech" if i % 2 == 0 else "silence"
-        window._set_vad_state(state)
-        assert window.lbl_vad_detail.property("vad_state") == state
+        frac = 0.0 if i % 2 == 0 else 0.6
+        window.dock.set_silence_fraction(frac)
+        assert window.dock.dot.ring() == frac
 
     elapsed = time.perf_counter() - start_time
     gc_after = tracemalloc.take_snapshot()
@@ -197,41 +164,37 @@ def test_vad_state_high_frequency_alternation_stress(window):
     top_stats = gc_after.compare_to(gc_before, "lineno")
     mem_delta_kb = sum(stat.size_diff for stat in top_stats) / 1024.0
 
-    print(f"\\n[3,000 VAD Alternations] Elapsed: {elapsed:.3f}s, Memory delta: {mem_delta_kb:.2f} KB")
-    assert elapsed < 2.0, f"VAD rapid switching took too long: {elapsed:.3f}s"
-    assert mem_delta_kb < 1024, f"VAD rapid switching leaked memory: {mem_delta_kb:.2f} KB"
+    print(f"\n[3,000 silence ring alternations] Elapsed: {elapsed:.3f}s, Memory delta: {mem_delta_kb:.2f} KB")
+    assert elapsed < 2.0, f"Przełączanie pierścienia trwało zbyt długo: {elapsed:.3f}s"
+    assert mem_delta_kb < 1024, f"Przełączanie pierścienia zwiększyło pamięć o {mem_delta_kb:.2f} KB"
 
 
 def test_dynamic_properties_persistence_across_all_themes(window):
     """
-    Challenge 6: Apply non-default dynamic property states, switch across all 4 themes,
-    and verify that dynamic properties are perfectly preserved.
+    Stany (wyciszenie kanału, tryb panelu, rodzaj powiadomienia) przetrwają zmianę motywu,
+    a ikony są przerysowane w nowych kolorach.
     """
-    window._set_cloud_status("Sync Error Occurred", "error")
-    window._update_source_mode_labels(mic_active=True, sys_active=False, app_active=True)
-    window._update_mute_btn_state(window.btn_mute_mic, True)
-    window._update_mute_btn_state(window.btn_mute_sys, False)
-    window._set_vad_state("speech")
+    window._toggle_mic_mute()
+    window.dock.set_mode("manualpaused")
+    window._show_cloud_problem("Błąd synchronizacji", "Brak połączenia.")
 
     all_themes = ["classic_dark", "classic_light", "emanager_dark", "emanager_light", "classic_dark"]
     for th in all_themes:
         theme.apply_theme(window, th)
+        window._apply_theme_extras()
 
-        # Assert property values survive theme reload
-        assert window.lbl_cloud_status.property("status") == "error"
-        assert window.lbl_mic_input.property("active") == "true"
-        assert window.lbl_sys_input.property("active") == "false"
-        assert window.lbl_app_input.property("active") == "true"
-        assert window.btn_mute_mic.property("muted") == "true"
-        assert window.btn_mute_sys.property("muted") == "false"
-        assert window.lbl_vad_detail.property("vad_state") == "speech"
+        assert window.dock.ch_mic.is_muted()
+        assert not window.dock.ch_sys.is_muted()
+        assert window.dock.mode() == "manualpaused"
+        assert window.dock.btn_pause.icon_name() == "play"
+        assert window.cloud_toast.property("kind") == "error"
+        assert not window.btn_settings.icon().isNull()
 
 
 def test_dynamic_property_edge_cases_and_adversarial_inputs(window):
     """
-    Challenge 7: Pass edge cases and unusual values to dynamic property methods:
-    empty string, 10,000-character string, Unicode / Polish diacritics / emojis,
-    HTML tags, and custom/unrecognized statuses.
+    Nietypowe treści komunikatów chmury: pusty tekst, 10 000 znaków, polskie znaki i emoji,
+    znaczniki HTML. Treść jest pokazywana jako zwykły tekst, nigdy jako HTML.
     """
     edge_cases = [
         ("", "info"),
@@ -244,5 +207,9 @@ def test_dynamic_property_edge_cases_and_adversarial_inputs(window):
 
     for text, status in edge_cases:
         window._set_cloud_status(text, status)
-        assert window.lbl_cloud_status.text() == text
-        assert window.lbl_cloud_status.property("status") == status
+        assert window._last_status_text == text
+        assert window._last_status_kind == status
+        window._show_cloud_problem("Nie udało się wysłać", text)
+        assert window.cloud_toast.lbl_desc.text() == text
+        assert window.cloud_toast.lbl_desc.textFormat() == Qt.TextFormat.PlainText
+        assert window.cloud_toast.width() <= max(window.centralWidget().width(), 332)

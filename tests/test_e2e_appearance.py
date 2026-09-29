@@ -1113,7 +1113,7 @@ def test_m6_settings_dialog_tab_title_no_mnemonic(qapp, isolated_settings):
 
     dlg = SettingsDialog()
     tab_texts = [dlg.tabs.tabText(i) for i in range(dlg.tabs.count())]
-    assert "🎨 Wygląd i Personalizacja" in tab_texts
+    assert "Wygląd i Personalizacja" in tab_texts
     assert not any("&" in t for t in tab_texts), f"Tab titles must not contain '&' mnemonic: {tab_texts}"
     dlg.deleteLater()
 

@@ -23,6 +23,54 @@ def extract_datetime_from_filename(filepath: str) -> Optional[datetime]:
     return None
 
 
+TRANSCRIPT_EMPTY_HTML = "Brak zarejestrowanej mowy."
+
+_SPEAKER_BADGE_RE = re.compile(r"^[^\w]+", re.UNICODE)
+
+
+def speaker_channel_class(speaker: str, channel: Optional[str] = None) -> str:
+    """Klasa CSS kolumny mówcy: 'ss' dla dźwięku systemu, 'sm' dla mikrofonu i pozostałych."""
+    if channel == "system":
+        return "ss"
+    if channel == "mic":
+        return "sm"
+    low = (speaker or "").lower()
+    if "🎧" in (speaker or "") or "system" in low:
+        return "ss"
+    return "sm"
+
+
+def render_turn_rows_html(rows: List[Tuple]) -> str:
+    """
+    Wspólny układ HTML transkrypcji dla podglądu w oknie: jedna tabela, w wierszu
+    znacznik czasu, mówca i tekst wypowiedzi.
+
+    rows: (time_label, speaker, text, css_class_mówcy[, kolor_mówcy]). Znacznik czasu MUSI
+    pochodzić z format_turn_timestamp(). Kroje i pozostałe kolory nadaje domyślny arkusz stylów
+    dokumentu (okno); opcjonalny kolor mówcy trafia do atrybutu style.
+    """
+    from html import escape
+    parts = []
+    for row in rows:
+        time_label, speaker, text, spk_class = row[:4]
+        color = row[4] if len(row) > 4 else None
+        text = (text or "").strip()
+        if not text:
+            continue
+        spk = _SPEAKER_BADGE_RE.sub("", (speaker or "").strip()) or (speaker or "").strip()
+        style = f" style='color: {color};'" if color else ""
+        parts.append(
+            "<tr>"
+            f"<td class='t' valign='top'>{escape(time_label)}</td>"
+            f"<td class='{spk_class}' valign='top'{style}>{escape(spk.upper())}</td>"
+            f"<td class='x' valign='top'>{escape(text)}</td>"
+            "</tr>"
+        )
+    if not parts:
+        return ""
+    return "<table class='tr' width='100%' cellspacing='0' cellpadding='0'>" + "".join(parts) + "</table>"
+
+
 def format_turn_timestamp(st: float, en: float, session_start_time: Optional[datetime] = None, ts_format: Optional[str] = None,
                           wall_start: Optional[Any] = None, wall_end: Optional[Any] = None) -> str:
     """Formatuje znacznik czasu dla wypowiedzi zgodnie z ustawieniami użytkownika (offset, godzina, hybryda)."""
@@ -320,9 +368,9 @@ class TranscriptionSession:
             txt = t.get("text", "").strip()
 
             time_label = format_turn_timestamp(st, en, base_dt, wall_start=t.get("wall_start"), wall_end=t.get("wall_end"))
-            html_blocks.append(f"<b>[{time_label}] {display_spk}:</b> {txt}<br><br>")
+            html_blocks.append((time_label, display_spk, txt, speaker_channel_class(spk, t.get("channel"))))
 
-        return "".join(html_blocks).strip()
+        return render_turn_rows_html(html_blocks)
 
     def update_speaker_mapping(self, new_mapping: Dict[str, str]):
         """

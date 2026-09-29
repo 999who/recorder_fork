@@ -122,66 +122,66 @@ THEMES: Dict[str, ThemeDefinition] = {
     "classic_dark": ThemeDefinition(
         id="classic_dark",
         name="Classic Dark",
-        description="Grafitowy motyw z turkusowymi akcentami (Segoe UI)",
+        description="Grafitowy notatnik z turkusowym akcentem (Segoe UI)",
         is_dark=True,
-        font_family_default="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
-        swatch_bg="#111216",
-        swatch_accent="#4cc9f0",
-        swatch_text="#edf2f4",
-        bg_window="#111216",
-        bg_app="#111216",
-        bg_surface="#171820",
-        bg_elevated="#1e1e2f",
-        bg_input="#181824",
-        bg_hover="#2b2e3d",
-        text_primary="#edf2f4",
-        text_secondary="#8d99ae",
-        text_muted="#6c757d",
-        text_on_accent="#111216",
-        border="#2b2d42",
-        border_strong="#2b2d42",
-        border_subtle="#212430",
-        border_focus="#4cc9f0",
-        accent="#4cc9f0",
-        accent_hover="#38bdf8",
-        accent_pressed="#0284c7",
-        btn_default_bg="#222533",
-        btn_default_hover="#33374c",
-        btn_default_text="#edf2f4",
-        btn_primary_bg="#10b981",
-        btn_primary_hover="#059669",
-        btn_primary_text="#ffffff",
-        btn_start_bg="#dc2626",
-        btn_start_hover="#ef4444",
+        font_family_default="'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
+        swatch_bg="#0e1115",
+        swatch_accent="#3fc9b4",
+        swatch_text="#e6e9ee",
+        bg_window="#0e1115",
+        bg_app="#0e1115",
+        bg_surface="#161a20",
+        bg_elevated="#1c2129",
+        bg_input="#1c2129",
+        bg_hover="#232932",
+        text_primary="#e6e9ee",
+        text_secondary="#8b94a1",
+        text_muted="#76818e",
+        text_on_accent="#06201c",
+        border="#262c35",
+        border_strong="#303845",
+        border_subtle="#1f242c",
+        border_focus="#3fc9b4",
+        accent="#3fc9b4",
+        accent_hover="#5fd6c4",
+        accent_pressed="#2aa996",
+        btn_default_bg="#232932",
+        btn_default_hover="#2f3743",
+        btn_default_text="#e6e9ee",
+        btn_primary_bg="#3fc9b4",
+        btn_primary_hover="#5fd6c4",
+        btn_primary_text="#06201c",
+        btn_start_bg="#ff5d62",
+        btn_start_hover="#ff7479",
         btn_start_text="#ffffff",
-        btn_pause_bg="#d97706",
-        btn_pause_hover="#f59e0b",
-        btn_pause_text="#ffffff",
-        btn_resume_bg="#059669",
-        btn_resume_hover="#10b981",
-        btn_resume_text="#ffffff",
-        btn_stop_bg="#4b5563",
-        btn_stop_hover="#6b7280",
-        btn_stop_text="#ffffff",
-        status_stopped_bg="#272a38",
-        status_stopped_text="#8d99ae",
-        status_speech_bg="#10b981",
+        btn_pause_bg="#2f3743",
+        btn_pause_hover="#3a4350",
+        btn_pause_text="#e6e9ee",
+        btn_resume_bg="#2f3743",
+        btn_resume_hover="#3a4350",
+        btn_resume_text="#e6e9ee",
+        btn_stop_bg="#e6e9ee",
+        btn_stop_hover="#ffffff",
+        btn_stop_text="#12161b",
+        status_stopped_bg="#232932",
+        status_stopped_text="#8b94a1",
+        status_speech_bg="#ff5d62",
         status_speech_text="#ffffff",
-        status_countdown_bg="#0284c7",
+        status_countdown_bg="#ff5d62",
         status_countdown_text="#ffffff",
-        status_autopaused_bg="#f59e0b",
-        status_autopaused_text="#ffffff",
-        status_manualpaused_bg="#6b7280",
-        status_manualpaused_text="#ffffff",
-        speaker_mic_color="#4cc9f0",
-        speaker_system_color="#a370f7",
-        speaker_mic="#4cc9f0",
-        speaker_system="#a370f7",
-        scrollbar_track="#111216",
-        scrollbar_handle="#2b2e3d",
-        scrollbar_handle_hover="#3b4055",
-        selection_bg="#272a38",
-        selection_text="#4cc9f0",
+        status_autopaused_bg="#e7a93f",
+        status_autopaused_text="#1a1205",
+        status_manualpaused_bg="#2f3743",
+        status_manualpaused_text="#e6e9ee",
+        speaker_mic_color="#3fc9b4",
+        speaker_system_color="#e7a93f",
+        speaker_mic="#3fc9b4",
+        speaker_system="#e7a93f",
+        scrollbar_track="#161a20",
+        scrollbar_handle="#2a313b",
+        scrollbar_handle_hover="#3a4350",
+        selection_bg="#1f4a45",
+        selection_text="#e6e9ee",
     ),
 
     # 2. Classic Light
@@ -501,6 +501,15 @@ def register_bundled_fonts(fonts_dir: Optional[str] = None, force: bool = False)
         except Exception as e:
             logger.warning(f"Błąd podczas przeszukiwania katalogu czcionek: {e}")
 
+    # Krój szeryfowy do tekstu transkrypcji (Source Serif 4, SIL OFL)
+    if os.path.isdir(target_dir):
+        try:
+            for entry in sorted(os.listdir(target_dir)):
+                if entry.lower().startswith("sourceserif") and entry.lower().endswith((".ttf", ".otf")):
+                    QFontDatabase.addApplicationFont(os.path.join(target_dir, entry))
+        except Exception as e:
+            logger.warning(f"Błąd rejestracji czcionki Source Serif: {e}")
+
     _fonts_registered = True
     _registered_fonts_dir = target_dir
     return registered_any
@@ -570,6 +579,50 @@ _THEME_QSS_CACHE: Dict[tuple, str] = {}
 def clear_theme_qss_cache() -> None:
     """Czyści pamięć podręczną wygenerowanych arkuszy QSS."""
     _THEME_QSS_CACHE.clear()
+
+
+def _indicator_chevron_path(color: str) -> str:
+    """Strzałka listy rozwijanej jako plik SVG w kolorze motywu."""
+    return _indicator_svg_path(
+        f"chevron_{color.lstrip('#')}",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" '
+        f'stroke="{color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M4 6l4 4 4-4"/></svg>',
+    )
+
+
+def _indicator_svg_path(name: str, svg: str) -> str:
+    import tempfile
+    folder = os.path.join(tempfile.gettempdir(), "recorder_ui_icons")
+    path = os.path.join(folder, f"{name}.svg")
+    if not os.path.exists(path):
+        try:
+            os.makedirs(folder, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(svg)
+        except OSError:
+            return ""
+    return path.replace("\\", "/")
+
+
+def _indicator_check_path(color: str) -> str:
+    """Zapisuje ikonę „ptaszka” pola wyboru jako plik SVG (QSS przyjmuje tylko ścieżki do plików)."""
+    import tempfile
+    folder = os.path.join(tempfile.gettempdir(), "recorder_ui_icons")
+    path = os.path.join(folder, f"check_{color.lstrip('#')}.svg")
+    if not os.path.exists(path):
+        try:
+            os.makedirs(folder, exist_ok=True)
+            svg = (
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" '
+                f'stroke="{color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+                '<path d="M3.5 8.5l3 3 6-6.5"/></svg>'
+            )
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(svg)
+        except OSError:
+            return ""
+    return path.replace("\\", "/")
 
 
 def generate_theme_qss(
@@ -765,11 +818,26 @@ def generate_theme_qss(
         background-color: {t.bg_input};
         border: 1px solid {t.border_strong};
         border-radius: 6px;
-        padding: 6px 10px;
+        padding: 6px 30px 6px 10px;
         color: {t.text_primary};
     }}
     QComboBox:hover, QComboBox:focus {{
         border-color: {t.border_focus};
+    }}
+    QComboBox::drop-down {{
+        subcontrol-origin: padding;
+        subcontrol-position: center right;
+        width: 26px;
+        border: none;
+        background: transparent;
+    }}
+    QComboBox::down-arrow {{
+        image: url({_indicator_chevron_path(t.text_secondary)});
+        width: 12px;
+        height: 12px;
+    }}
+    QComboBox::down-arrow:disabled {{
+        image: url({_indicator_chevron_path(t.text_muted)});
     }}
     QComboBox QAbstractItemView {{
         background-color: {t.bg_input};
@@ -798,7 +866,7 @@ def generate_theme_qss(
         width: 16px;
         height: 16px;
         border: 1px solid {t.border_strong};
-        border-radius: 3px;
+        border-radius: 5px;
         background-color: {t.bg_input};
     }}
     QCheckBox::indicator:hover {{
@@ -807,6 +875,7 @@ def generate_theme_qss(
     QCheckBox::indicator:checked {{
         background-color: {t.accent};
         border-color: {t.accent};
+        image: url({_indicator_check_path(t.text_on_accent)});
     }}
 
     QRadioButton::indicator {{
@@ -820,8 +889,10 @@ def generate_theme_qss(
         border-color: {t.accent};
     }}
     QRadioButton::indicator:checked {{
-        background-color: {t.accent};
-        border-color: {t.accent};
+        background-color: {t.text_on_accent};
+        border: 5px solid {t.accent};
+        width: 8px;
+        height: 8px;
     }}
 
     /* =======================================================================
@@ -1476,6 +1547,290 @@ def generate_theme_qss(
     QPushButton#BtnManualSync:hover {{
         background-color: {t.accent_hover};
     }}
+
+    /* =======================================================================
+       GŁÓWNE OKNO „NOTATNIK”: PASEK GÓRNY, ARKUSZ, PANEL NAGRYWANIA
+       ======================================================================= */
+    QWidget#MainContainerWidget {{
+        background-color: {t.bg_window};
+    }}
+    QLabel#BrandLabel {{
+        font-size: 15px;
+        font-weight: 600;
+        color: {t.text_primary};
+    }}
+    QPushButton#SourcePill {{
+        background-color: {t.bg_surface};
+        border: 1px solid {t.border};
+        border-radius: 13px;
+        min-height: 26px;
+        max-height: 26px;
+        padding: 0px 12px 0px 9px;
+        color: {t.text_secondary};
+        font-size: 12px;
+        font-weight: 400;
+        text-align: left;
+    }}
+    QPushButton#SourcePill:hover {{
+        border-color: {t.border_strong};
+        color: {t.text_primary};
+    }}
+    QPushButton#IconBtn, QPushButton#HistoryIconBtn, QPushButton#CloudToastBtn {{
+        background-color: transparent;
+        border: none;
+        border-radius: 10px;
+        padding: 0px;
+    }}
+    QPushButton#IconBtn:hover, QPushButton#HistoryIconBtn:hover {{
+        background-color: {t.bg_hover};
+    }}
+    QPushButton#IconBtn:pressed, QPushButton#HistoryIconBtn:pressed {{
+        background-color: {t.border_strong};
+    }}
+    QPushButton#IconBtn:checked {{
+        background-color: {t.bg_hover};
+    }}
+    QPushButton#IconBtn:focus, QPushButton#DockPauseBtn:focus, QPushButton#DockStopBtn:focus,
+    QPushButton#DockChannel:focus, QPushButton#SquareIconBtn:focus {{
+        border: 1px solid {t.border_focus};
+    }}
+    QPushButton#IconBtn::menu-indicator {{
+        image: none;
+        width: 0px;
+    }}
+    QPushButton#SquareIconBtn {{
+        background-color: transparent;
+        border: 1px solid {t.border};
+        border-radius: 8px;
+        padding: 0px;
+    }}
+    QPushButton#SquareIconBtn:hover {{
+        background-color: {t.bg_hover};
+        border-color: {t.border_strong};
+    }}
+    QFrame#TranscriptSheet {{
+        background-color: {t.bg_surface};
+        border: 1px solid {t.border};
+        border-radius: 14px;
+    }}
+    QLabel#DocTitle {{
+        font-family: 'Source Serif 4', 'Source Serif 4 SmText', Georgia, 'Cambria', serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: {t.text_primary};
+    }}
+    QLabel#DocMeta {{
+        font-size: 12px;
+        color: {t.text_secondary};
+    }}
+    QTextEdit#TranscriptView {{
+        background-color: transparent;
+        border: none;
+        border-radius: 0px;
+        padding: 0px;
+    }}
+    QLabel#EmptyTitle {{
+        font-family: 'Source Serif 4', 'Source Serif 4 SmText', Georgia, 'Cambria', serif;
+        font-size: 21px;
+        color: {t.text_primary};
+    }}
+    QLabel#EmptyHint {{
+        font-size: 13px;
+        color: {t.text_secondary};
+    }}
+    QPushButton#BigRecordBtn {{
+        background: transparent;
+        border: none;
+    }}
+    QFrame#RecordDock {{
+        background-color: {t.bg_hover};
+        border: 1px solid {t.border_strong};
+        border-radius: 28px;
+    }}
+    QLabel#DockTime {{
+        font-size: 16px;
+        font-weight: 600;
+        color: {t.text_primary};
+        padding-right: 6px;
+    }}
+    QLabel#DockTime[processing="true"] {{
+        font-size: 13px;
+        font-weight: 500;
+        color: {t.text_primary};
+        padding: 0px 10px 0px 2px;
+    }}
+    QFrame#DockSeparator {{
+        background-color: {t.border_strong};
+        border: none;
+    }}
+    QPushButton#DockChannel {{
+        background-color: transparent;
+        border: none;
+        border-radius: 20px;
+        padding: 0px;
+    }}
+    QPushButton#DockChannel:hover {{
+        background-color: {t.btn_pause_bg};
+    }}
+    QPushButton#DockPauseBtn {{
+        background-color: {t.btn_pause_bg};
+        border: none;
+        border-radius: 22px;
+        padding: 0px;
+    }}
+    QPushButton#DockPauseBtn:hover {{
+        background-color: {t.btn_pause_hover};
+    }}
+    QPushButton#DockStopBtn {{
+        background-color: {t.btn_stop_bg};
+        border: none;
+        border-radius: 22px;
+        padding: 0px;
+    }}
+    QPushButton#DockStopBtn:hover {{
+        background-color: {t.btn_stop_hover};
+    }}
+    QFrame#CloudToast {{
+        background-color: {t.bg_elevated};
+        border: 1px solid {t.btn_start_bg};
+        border-radius: 12px;
+    }}
+    QFrame#CloudToast[kind="warning"] {{
+        border-color: {t.status_autopaused_bg};
+    }}
+    QLabel#CloudToastIcon {{
+        background-color: {t.bg_hover};
+        border-radius: 15px;
+    }}
+    QLabel#CloudToastTitle {{
+        font-size: 13px;
+        font-weight: 600;
+        color: {t.text_primary};
+    }}
+    QLabel#CloudToastDesc {{
+        font-size: 12px;
+        color: {t.text_secondary};
+    }}
+    QPushButton#CloudToastBtn:hover {{
+        background-color: {t.bg_hover};
+    }}
+    QFrame#HistoryPanel {{
+        background-color: {t.bg_elevated};
+        border: none;
+        border-left: 1px solid {t.border};
+    }}
+    QLabel#HistoryHeader {{
+        font-size: 14px;
+        font-weight: 600;
+        color: {t.text_primary};
+    }}
+    QListWidget#HistoryList {{
+        background: transparent;
+        border: none;
+        outline: none;
+    }}
+    QListWidget#HistoryList::item {{
+        border: none;
+        border-radius: 8px;
+        padding: 0px;
+        margin: 1px 0px;
+        color: {t.text_muted};
+        font-size: 10px;
+        font-weight: 600;
+    }}
+    QListWidget#HistoryList::item:hover {{
+        background-color: {t.bg_hover};
+    }}
+    QListWidget#HistoryList::item:selected {{
+        background-color: {t.bg_hover};
+        color: {t.text_muted};
+    }}
+    QLabel#HistoryTitle {{
+        font-size: 13px;
+        color: {t.text_primary};
+        background: transparent;
+    }}
+    QLabel#HistorySub {{
+        font-size: 11px;
+        color: {t.text_secondary};
+        background: transparent;
+    }}
+
+    /* Okno ustawień: boczna nawigacja */
+    QFrame#SettingsNav {{
+        background-color: {t.bg_window};
+        border: none;
+        border-right: 1px solid {t.border_subtle};
+    }}
+    QWidget#SettingsContent {{
+        background-color: {t.bg_surface};
+    }}
+    QLabel#LblSettingsHeaderTitle {{
+        font-size: 15px;
+        font-weight: 600;
+        color: {t.text_primary};
+    }}
+    QListWidget#SettingsNavList {{
+        background: transparent;
+        border: none;
+        outline: none;
+    }}
+    QListWidget#SettingsNavList::item {{
+        border: none;
+        border-radius: 7px;
+        padding: 0px 8px;
+        color: {t.text_secondary};
+    }}
+    QListWidget#SettingsNavList::item:hover {{
+        background-color: {t.bg_hover};
+        color: {t.text_primary};
+    }}
+    QListWidget#SettingsNavList::item:selected {{
+        background-color: {t.bg_elevated};
+        color: {t.text_primary};
+    }}
+    QScrollArea#SettingsScroll,
+    QScrollArea#SettingsScroll > QWidget,
+    QWidget#SettingsScrollContent {{
+        background: transparent;
+        border: none;
+    }}
+
+    QTabWidget#SettingsTabWidget::pane {{
+        border: none;
+        background: transparent;
+    }}
+    QPushButton#BtnGhost {{
+        background: transparent;
+        border: none;
+        color: {t.text_secondary};
+        text-align: left;
+        padding: 6px 10px;
+    }}
+    QPushButton#BtnGhost:hover {{
+        color: {t.text_primary};
+        background-color: {t.bg_hover};
+    }}
+    QFrame#Segmented {{
+        background-color: {t.bg_window};
+        border: 1px solid {t.border};
+        border-radius: 9px;
+    }}
+    QPushButton#SegmentBtn {{
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 12px;
+        color: {t.text_secondary};
+        font-weight: 400;
+    }}
+    QPushButton#SegmentBtn:hover {{
+        color: {t.text_primary};
+    }}
+    QPushButton#SegmentBtn:checked {{
+        background-color: {t.bg_elevated};
+        color: {t.text_primary};
+    }}
     """
     _THEME_QSS_CACHE[cache_key] = qss
     return qss
@@ -1691,3 +2046,4 @@ DARK_THEME_QSS = generate_theme_qss("classic_dark")
 def setup_dark_palette(app: Optional[QApplication] = None) -> None:
     """Alias wstecznej kompatybilności dla setup_theme_palette('classic_dark')."""
     setup_theme_palette(app, "classic_dark")
+

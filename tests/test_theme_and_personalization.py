@@ -149,8 +149,8 @@ def test_setup_theme_palette(qapp):
     # Dark theme
     theme.setup_theme_palette(qapp, "classic_dark")
     pal = qapp.palette()
-    assert pal.color(QPalette.ColorRole.Window).name().lower() == "#111216"
-    assert pal.color(QPalette.ColorRole.Highlight).name().lower() == "#4cc9f0"
+    assert pal.color(QPalette.ColorRole.Window).name().lower() == "#0e1115"
+    assert pal.color(QPalette.ColorRole.Highlight).name().lower() == "#3fc9b4"
 
     # Light theme
     theme.setup_theme_palette(qapp, "classic_light")
@@ -162,14 +162,14 @@ def test_setup_theme_palette(qapp):
 def test_setup_dark_palette_legacy(qapp):
     """setup_dark_palette legacy alias must execute without error."""
     theme.setup_dark_palette(qapp)
-    assert qapp.palette().color(QPalette.ColorRole.Window).name().lower() == "#111216"
+    assert qapp.palette().color(QPalette.ColorRole.Window).name().lower() == "#0e1115"
 
 
 def test_dark_theme_qss_legacy():
     """DARK_THEME_QSS legacy constant must be a non-empty string."""
     assert isinstance(theme.DARK_THEME_QSS, str)
     assert len(theme.DARK_THEME_QSS) > 500
-    assert "#111216" in theme.DARK_THEME_QSS
+    assert "#0e1115" in theme.DARK_THEME_QSS
 
 
 # ==============================================================================

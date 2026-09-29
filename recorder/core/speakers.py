@@ -351,7 +351,8 @@ def format_turns(turns: List[Dict[str, Any]], speaker_mapping: Optional[Dict[str
             time_label = format_turn_timestamp(start, end, session_start_time)
             final_plain += f"[{time_label}] {display_spk}: {text}\n\n"
 
-    final_html = ""
+    from recorder.core.session import render_turn_rows_html, speaker_channel_class
+    rows = []
     display_turns = list(reversed(chrono_turns)) if reverse_order else chrono_turns
     for t in display_turns:
         raw_spk = t.get("speaker", "SPEAKER")
@@ -362,7 +363,8 @@ def format_turns(turns: List[Dict[str, Any]], speaker_mapping: Optional[Dict[str
 
         if text:
             time_label = format_turn_timestamp(start, end, session_start_time)
-            final_html += f"<b>[{time_label}] {display_spk}:</b> {text}<br><br>"
+            rows.append((time_label, display_spk, text, speaker_channel_class(raw_spk, t.get("channel"))))
+    final_html = render_turn_rows_html(rows)
 
     if not final_html:
         final_html = "Brak zarejestrowanej mowy."

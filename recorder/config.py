@@ -465,7 +465,7 @@ def get_theme() -> str:
 
 
 THEME_SPEAKER_COLORS: Dict[str, Dict[str, str]] = {
-    "classic_dark": {"mic": "#4cc9f0", "system": "#a370f7"},
+    "classic_dark": {"mic": "#3fc9b4", "system": "#e7a93f"},
     "classic_light": {"mic": "#0369a1", "system": "#7c3aed"},
     "emanager_dark": {"mic": "#ff6b6b", "system": "#38bdf8"},
     "emanager_light": {"mic": "#b91c1c", "system": "#1d4ed8"},

@@ -385,6 +385,7 @@ class RollingTranscriptionWorker(QThread):
             plain_parts.append(f"[{time_label}] {display_spk}: {txt}\n\n")
         full_plain = "".join(plain_parts)
 
+        from recorder.core.session import render_turn_rows_html
         html_parts = []
         display_turns = list(reversed(combined_turns)) if reverse_order else combined_turns
         for t in display_turns:
@@ -396,15 +397,10 @@ class RollingTranscriptionWorker(QThread):
 
             time_label = format_turn_timestamp(st, en, self.session_start_time, ts_format=ts_format, wall_start=t.get("wall_start"), wall_end=t.get("wall_end"))
             if channel == "system":
-                badge = "🎧 "
-                color = sys_color
+                html_parts.append((time_label, spk, txt, "ss", sys_color))
             else:
-                badge = "🎙️ "
-                color = mic_color
-
-            display_spk = f"{badge}{spk}" if not (spk.startswith("🎙️") or spk.startswith("🎧")) else spk
-            html_parts.append(f"<b>[{time_label}] <span style='color: {color};'>{display_spk}:</span></b> {txt}<br><br>")
-        full_html = "".join(html_parts)
+                html_parts.append((time_label, spk, txt, "sm", mic_color))
+        full_html = render_turn_rows_html(html_parts) or "Brak zarejestrowanej mowy."
 
         return full_html, full_plain, combined_turns
 

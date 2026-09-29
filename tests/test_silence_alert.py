@@ -132,7 +132,7 @@ def test_unified_notification_system():
 
     # Weryfikacja przekazania do Action Center po timeout
     win._handle_silence_timed_out_to_tray("10 min", RecordSourceMode.HYBRID_DUAL)
-    assert "10 min" in win.lbl_cloud_status.text()
+    assert "10 min" in win._last_status_text
 
     # Weryfikacja tłumienia dźwięku systemowego podczas powiadomienia
     worker = SmartAudioWorker(auto_pause_sec=5.0)

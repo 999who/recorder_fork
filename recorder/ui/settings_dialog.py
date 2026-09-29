@@ -7,9 +7,9 @@ from PySide6.QtWidgets import (
     QPushButton, QTabWidget, QWidget, QTextEdit, QTextBrowser, QComboBox,
     QSlider, QSpinBox, QCheckBox, QGroupBox, QFormLayout,
     QMessageBox, QFrame, QSizePolicy, QProgressBar, QScrollArea, QFileDialog,
-    QTableWidget, QTableWidgetItem, QHeaderView
+    QTableWidget, QTableWidgetItem, QHeaderView, QListWidget, QListWidgetItem
 )
-from PySide6.QtCore import Qt, Signal as pyqtSignal, QUrl
+from PySide6.QtCore import Qt, Signal as pyqtSignal, QUrl, QSize
 from PySide6.QtGui import QFont, QIcon, QDesktopServices
 
 from recorder.core.replacements import normalize_pairs
@@ -22,7 +22,10 @@ from recorder.config import (
     DEFAULT_WHISPER_MODEL,
     RecordSourceMode,
     APP_VERSION,
-    GITHUB_REPO
+    GITHUB_REPO,
+    ASR_MODELS,
+    PARAKEET_MODEL_ID,
+    get_default_model_id,
 )
 from recorder.core.updater import (
     CheckUpdateWorker,
@@ -30,6 +33,16 @@ from recorder.core.updater import (
     apply_in_place_update
 )
 from recorder.core.logger import open_logs_folder
+
+
+def strip_leading_symbols(text: str) -> str:
+    """Usuwa emoji i symbole z początku etykiety (np. '🎤 Mikrofon' -> 'Mikrofon')."""
+    import re
+    return re.sub(r"^[^\w(]+", "", (text or "").strip(), flags=re.UNICODE).strip()
+
+
+def clean_device_label(label: str) -> str:
+    return strip_leading_symbols(label) or (label or "")
 
 
 class MarkdownChangelogBrowser(QTextBrowser):
@@ -89,7 +102,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("⚙️ Ustawienia Dyktafonu AI")
+        self.setWindowTitle("Ustawienia")
         from recorder.ui.windows_integration import get_app_icon_path
         from recorder.config import get_theme, get_font_size
         self._initial_theme = get_theme()
@@ -99,29 +112,59 @@ class SettingsDialog(QDialog):
         ico = get_app_icon_path("ico")
         if ico and os.path.exists(ico):
             self.setWindowIcon(QIcon(ico))
-        self.setMinimumSize(640, 560)
-        self.resize(680, 600)
+        self.setMinimumSize(820, 600)
+        self.resize(880, 660)
         self._setup_ui()
         self._load_values()
+        self._relax_combo_widths()
+
+    # Ikony pozycji nawigacji (kolejność jak kolejność zakładek)
+    NAV_ICONS = ("mic", "book", "wave", "palette", "cloud", "refresh")
 
     def _setup_ui(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(14)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        # Nagłówek okna
-        header_layout = QHBoxLayout()
-        lbl_title = QLabel("⚙️ Konfiguracja & Preferencje AI")
-        lbl_title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        # Boczna nawigacja (zakładki QTabWidget z ukrytym paskiem kart)
+        nav_frame = QFrame()
+        nav_frame.setObjectName("SettingsNav")
+        nav_frame.setFixedWidth(210)
+        nav_layout = QVBoxLayout(nav_frame)
+        nav_layout.setContentsMargins(10, 18, 10, 14)
+        nav_layout.setSpacing(4)
+
+        lbl_title = QLabel("Ustawienia")
         lbl_title.setObjectName("LblSettingsHeaderTitle")
-        header_layout.addWidget(lbl_title)
-        header_layout.addStretch()
-        main_layout.addLayout(header_layout)
+        lbl_title.setContentsMargins(10, 0, 0, 10)
+        nav_layout.addWidget(lbl_title)
+
+        self.nav_list = QListWidget()
+        self.nav_list.setObjectName("SettingsNavList")
+        self.nav_list.setFrameShape(QFrame.Shape.NoFrame)
+        self.nav_list.setIconSize(QSize(17, 17))
+        self.nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        nav_layout.addWidget(self.nav_list, stretch=1)
+
+        self.btn_restore_defaults = QPushButton("Przywróć domyślne")
+        self.btn_restore_defaults.setObjectName("BtnGhost")
+        self.btn_restore_defaults.clicked.connect(self._restore_defaults)
+        nav_layout.addWidget(self.btn_restore_defaults)
+        root.addWidget(nav_frame)
+
+        content = QWidget()
+        content.setObjectName("SettingsContent")
+        main_layout = QVBoxLayout(content)
+        main_layout.setContentsMargins(20, 16, 20, 16)
+        main_layout.setSpacing(14)
 
         # Zakładki
         self.tabs = QTabWidget()
         self.tabs.setObjectName("SettingsTabWidget")
+        self.tabs.tabBar().hide()
+        self.tabs.setDocumentMode(True)
 
+        self._create_tab_recording()
         self._create_tab_dictionary()
         self._create_tab_vad()
         self._create_tab_appearance()
@@ -129,27 +172,290 @@ class SettingsDialog(QDialog):
         self._create_tab_updates()
 
         main_layout.addWidget(self.tabs, stretch=1)
+        self._build_nav()
 
         # Dolny pasek przycisków
         btn_bar = QHBoxLayout()
         btn_bar.setSpacing(10)
-
-        self.btn_restore_defaults = QPushButton("🔄 Przywróć Domyślne")
-        self.btn_restore_defaults.clicked.connect(self._restore_defaults)
-        btn_bar.addWidget(self.btn_restore_defaults)
-
         btn_bar.addStretch()
 
         self.btn_cancel = QPushButton("Anuluj")
         self.btn_cancel.clicked.connect(self.reject)
         btn_bar.addWidget(self.btn_cancel)
 
-        self.btn_save = QPushButton("💾 Zapisz Ustawienia")
+        self.btn_save = QPushButton("Zapisz")
         self.btn_save.setObjectName("BtnSave")
+        self.btn_save.setDefault(True)
         self.btn_save.clicked.connect(self._save_and_accept)
         btn_bar.addWidget(self.btn_save)
 
         main_layout.addLayout(btn_bar)
+        root.addWidget(content, stretch=1)
+
+    def _build_nav(self):
+        """Buduje boczną listę nawigacji na podstawie zakładek i synchronizuje wybór."""
+        from recorder.ui.icons import make_icon
+        from recorder.ui.widgets import current_tokens
+        t = current_tokens()
+        self.nav_list.clear()
+        for i in range(self.tabs.count()):
+            name = self.NAV_ICONS[i] if i < len(self.NAV_ICONS) else "sliders"
+            item = QListWidgetItem(self.tabs.tabText(i))
+            ic = QIcon()
+            ic.addPixmap(make_icon(name, t.text_secondary, 17).pixmap(17, 17), QIcon.Mode.Normal)
+            ic.addPixmap(make_icon(name, t.text_primary, 17).pixmap(17, 17), QIcon.Mode.Selected)
+            item.setIcon(ic)
+            item.setSizeHint(QSize(180, 38))
+            self.nav_list.addItem(item)
+        self.nav_list.currentRowChanged.connect(self.tabs.setCurrentIndex)
+        self.tabs.currentChanged.connect(self._sync_nav)
+        self.nav_list.setCurrentRow(self.tabs.currentIndex())
+
+    def _sync_nav(self, index: int):
+        if self.nav_list.currentRow() != index:
+            self.nav_list.blockSignals(True)
+            self.nav_list.setCurrentRow(index)
+            self.nav_list.blockSignals(False)
+
+    # ------------------------------------------------------------------
+    # Karta: Nagrywanie (źródła dźwięku, model, auto-pauza)
+    # ------------------------------------------------------------------
+    def _is_parent_recording(self) -> bool:
+        parent = self.parent()
+        try:
+            return bool(parent is not None and hasattr(parent, "is_recording") and parent.is_recording())
+        except Exception:
+            return False
+
+    def _create_tab_recording(self):
+        from recorder.ui.widgets import SegmentedControl, IconButton
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(18)
+        recording = self._is_parent_recording()
+
+        # Źródła dźwięku
+        box_src = QGroupBox("Źródła dźwięku")
+        form = QFormLayout(box_src)
+        form.setSpacing(10)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+        self.combo_default_source_mode = SegmentedControl()
+        self.combo_default_source_mode.addItem("Mikrofon", RecordSourceMode.MIC_ONLY, ("mic",))
+        self.combo_default_source_mode.addItem("System", RecordSourceMode.SYSTEM_ONLY, ("headphones",))
+        self.combo_default_source_mode.addItem("Oba", RecordSourceMode.HYBRID_DUAL, ("mic", "headphones"))
+        self.combo_default_source_mode.currentIndexChanged.connect(self._on_rec_mode_changed)
+        form.addRow(self._form_label("Nagrywaj"), self.combo_default_source_mode)
+
+        self.combo_mic = QComboBox()
+        self.btn_refresh_mic = IconButton("refresh", "Odśwież listę mikrofonów", size=34, icon_px=16, object_name="SquareIconBtn")
+        self.btn_refresh_mic.clicked.connect(lambda: self._fill_microphones(force=True))
+        form.addRow(self._form_label("Mikrofon"), self._with_side_button(self.combo_mic, self.btn_refresh_mic))
+
+        self.combo_loopback = QComboBox()
+        self.btn_refresh_loopback = IconButton("refresh", "Odśwież listę głośników i słuchawek", size=34, icon_px=16, object_name="SquareIconBtn")
+        self.btn_refresh_loopback.clicked.connect(self._fill_loopbacks)
+        form.addRow(self._form_label("Dźwięk systemu"), self._with_side_button(self.combo_loopback, self.btn_refresh_loopback))
+
+        self.combo_target_app = QComboBox()
+        self.combo_target_app.setToolTip("Program, z którego nagrywany jest dźwięk systemu. Można go zmienić także w trakcie nagrania.")
+        self.btn_refresh_apps = IconButton("refresh", "Odśwież listę programów z dźwiękiem", size=34, icon_px=16, object_name="SquareIconBtn")
+        self.btn_refresh_apps.clicked.connect(self._fill_target_apps)
+        form.addRow(self._form_label("Aplikacja"), self._with_side_button(self.combo_target_app, self.btn_refresh_apps))
+        layout.addWidget(box_src)
+
+        # Model rozpoznawania mowy
+        box_model = QGroupBox("Rozpoznawanie mowy")
+        mform = QFormLayout(box_model)
+        mform.setSpacing(10)
+        self.combo_model = QComboBox()
+        if WHISPER_ENABLED:
+            self.combo_model.addItem("Automatycznie", "")
+            self.combo_model.setItemData(0, "Parakeet bez karty NVIDIA, Whisper z kartą NVIDIA", Qt.ItemDataRole.ToolTipRole)
+        for m_id, m_info in ASR_MODELS.items():
+            self.combo_model.addItem(m_info["label"], m_id)
+        self.combo_model.currentIndexChanged.connect(self._on_model_changed)
+        self.btn_auto_model = IconButton("wand", "Dopasuj model do tego komputera", size=34, icon_px=16, object_name="SquareIconBtn")
+        self.btn_auto_model.clicked.connect(self._on_auto_model_clicked)
+        mform.addRow(self._form_label("Model"), self._with_side_button(self.combo_model, self.btn_auto_model))
+        self.lbl_model_hint = QLabel("")
+        self.lbl_model_hint.setObjectName("LblSettingDesc")
+        self.lbl_model_hint.setWordWrap(True)
+        mform.addRow(self._form_label(""), self.lbl_model_hint)
+        layout.addWidget(box_model)
+
+        # Auto-pauza
+        box_pause = QGroupBox("Auto-pauza")
+        prow = QHBoxLayout(box_pause)
+        prow.setSpacing(12)
+        prow.addWidget(self._form_label("Pauza po ciszy"))
+        self.slider_auto_pause = QSlider(Qt.Orientation.Horizontal)
+        self.slider_auto_pause.setRange(1, 15)
+        self.slider_auto_pause.setValue(5)
+        self.lbl_auto_pause_val = QLabel("5 s")
+        self.lbl_auto_pause_val.setObjectName("LblVadVal")
+        self.lbl_auto_pause_val.setMinimumWidth(40)
+        self.slider_auto_pause.valueChanged.connect(lambda v: self.lbl_auto_pause_val.setText(f"{v} s"))
+        prow.addWidget(self.slider_auto_pause, stretch=1)
+        prow.addWidget(self.lbl_auto_pause_val)
+        layout.addWidget(box_pause)
+
+        if recording:
+            note = QLabel("Trwa nagrywanie: źródło, mikrofon, dźwięk systemu i model zmienisz po jego zakończeniu. "
+                          "Aplikację audio i auto-pauzę można zmienić od razu.")
+            note.setObjectName("LblSettingDesc")
+            note.setWordWrap(True)
+            layout.addWidget(note)
+            for w in (self.combo_default_source_mode, self.combo_mic, self.btn_refresh_mic,
+                      self.combo_loopback, self.btn_refresh_loopback, self.combo_model, self.btn_auto_model):
+                w.setEnabled(False)
+
+        layout.addStretch()
+        self.tabs.addTab(self._scrollable(tab), "Nagrywanie")
+
+    def _relax_combo_widths(self) -> None:
+        """Długie pozycje list nie rozpychają okna; pełna nazwa jest w rozwijanej liście."""
+        for combo in self.findChildren(QComboBox):
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(14)
+            combo.setMinimumWidth(140)
+        # Etykiety formularzy wyśrodkowane w pionie względem pól
+        for form in self.findChildren(QFormLayout):
+            form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            for row in range(form.rowCount()):
+                label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                field_item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+                if label_item and field_item and label_item.widget() and isinstance(label_item.widget(), QLabel):
+                    lbl = label_item.widget()
+                    lbl.setMinimumHeight(max(lbl.minimumHeight(), field_item.sizeHint().height()))
+                    lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+    @staticmethod
+    def _scrollable(content: QWidget) -> QScrollArea:
+        """Opakowuje kartę w przewijany obszar, aby elementy nie były ściskane w małym oknie."""
+        scroll = QScrollArea()
+        scroll.setObjectName("SettingsScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        content.setObjectName(content.objectName() or "SettingsScrollContent")
+        scroll.setWidget(content)
+        return scroll
+
+    @staticmethod
+    def _form_label(text: str) -> QLabel:
+        """Etykieta wiersza o stałej szerokości, wyśrodkowana względem pola (równe kolumny)."""
+        lbl = QLabel(text)
+        lbl.setFixedWidth(120)
+        lbl.setMinimumHeight(34)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        return lbl
+
+    @staticmethod
+    def _with_side_button(widget: QWidget, button: QWidget) -> QWidget:
+        box = QWidget()
+        row = QHBoxLayout(box)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        row.addWidget(widget, stretch=1)
+        row.addWidget(button)
+        return box
+
+    def _on_rec_mode_changed(self, _index: int = 0):
+        mode = self.combo_default_source_mode.currentData()
+        if self._is_parent_recording():
+            return
+        self.combo_mic.setEnabled(mode != RecordSourceMode.SYSTEM_ONLY)
+        self.btn_refresh_mic.setEnabled(mode != RecordSourceMode.SYSTEM_ONLY)
+        sys_on = mode != RecordSourceMode.MIC_ONLY
+        for w in (self.combo_loopback, self.btn_refresh_loopback, self.combo_target_app, self.btn_refresh_apps):
+            w.setEnabled(sys_on)
+
+    def _fill_microphones(self, force: bool = False, selected_name: Optional[str] = None):
+        from recorder.audio.devices import get_working_input_devices
+        if selected_name is None:
+            selected_name = self.combo_mic.currentData()
+        self.combo_mic.clear()
+        try:
+            devices = get_working_input_devices(force_refresh=force) or []
+        except Exception:
+            devices = []
+        match = -1
+        default_idx = 0
+        for i, dev in enumerate(devices):
+            self.combo_mic.addItem(clean_device_label(dev.get("label") or dev.get("name", "")), dev.get("name", ""))
+            if selected_name and dev.get("name") == selected_name:
+                match = i
+            if dev.get("is_default"):
+                default_idx = i
+        if not devices:
+            self.combo_mic.addItem("Nie wykryto mikrofonu", "")
+        self.combo_mic.setCurrentIndex(match if match != -1 else default_idx)
+
+    def _fill_loopbacks(self, selected_index: Optional[str] = None):
+        from recorder.audio.devices import get_working_loopback_devices
+        if selected_index is None:
+            cur = self.combo_loopback.currentData()
+            selected_index = "" if cur is None else str(cur)
+        self.combo_loopback.clear()
+        self.combo_loopback.addItem("Domyślne wyjście systemowe", "")
+        try:
+            loops = get_working_loopback_devices() or []
+        except Exception:
+            loops = []
+        match = 0
+        for i, dev in enumerate(loops, start=1):
+            self.combo_loopback.addItem(clean_device_label(dev.get("label", "")), str(dev.get("index", "")))
+            if selected_index and str(dev.get("index", "")) == str(selected_index):
+                match = i
+        self.combo_loopback.setCurrentIndex(match)
+
+    def _fill_target_apps(self, selected_exe: Optional[str] = None):
+        from recorder.audio.devices import get_active_audio_apps
+        if selected_exe is None:
+            selected_exe = self.combo_target_app.currentData() or ""
+        self.combo_target_app.clear()
+        self.combo_target_app.addItem("Wszystkie programy", "")
+        match = 0
+        try:
+            apps = get_active_audio_apps() or []
+        except Exception:
+            apps = []
+        for i, app in enumerate(apps, start=1):
+            self.combo_target_app.addItem(f"{app['name']} ({app['exe']})", app["exe"])
+            if selected_exe and app["exe"].lower() == selected_exe.lower():
+                match = i
+        if selected_exe and match == 0:
+            self.combo_target_app.addItem(f"{selected_exe} (nieaktywny)", selected_exe)
+            match = self.combo_target_app.count() - 1
+        self.combo_target_app.setCurrentIndex(match)
+
+    def _on_model_changed(self, _index: int = 0):
+        from recorder.config import get_hardware_acceleration_info
+        m_id = self.combo_model.currentData()
+        desc = ASR_MODELS.get(m_id, {}).get("desc", "") if m_id else "Parakeet na komputerach bez karty NVIDIA, Whisper z kartą NVIDIA."
+        try:
+            hw = get_hardware_acceleration_info().get("badge_text", "")
+        except Exception:
+            hw = ""
+        hw = strip_leading_symbols(hw)
+        self.lbl_model_hint.setText(f"{hw}. {desc}" if hw else desc)
+
+    def _on_auto_model_clicked(self):
+        from recorder.config import get_recommended_profile
+        profile = get_recommended_profile()
+        idx = self.combo_model.findData(profile.get("recommended_model"))
+        if idx != -1:
+            self.combo_model.setCurrentIndex(idx)
+        QMessageBox.information(self, profile.get("title", "Dopasowanie modelu"), profile.get("message", ""))
+
+    def _selected_model_settings(self) -> dict:
+        m_id = self.combo_model.currentData()
+        if not m_id:
+            return {"asr_engine": ""}
+        if m_id == PARAKEET_MODEL_ID:
+            return {"asr_engine": "parakeet"}
+        return {"asr_engine": "whisper", "default_whisper_model": m_id}
 
     def _create_tab_dictionary(self):
         """Karta 1: Słownik branżowy, silnik rozpoznawania mowy, Beam Size Whispera."""
@@ -158,7 +464,7 @@ class SettingsDialog(QDialog):
         layout.setSpacing(12)
 
         # Sekcja: Słownik Branżowy
-        box_dict = QGroupBox("📚 Słownik Słów Branżowych & Nazw Własnych (Initial Prompt)")
+        box_dict = QGroupBox("Słownik branżowy i nazwy własne")
         dict_layout = QVBoxLayout(box_dict)
 
         lbl_dict_info = QLabel(
@@ -180,7 +486,7 @@ class SettingsDialog(QDialog):
         lbl_presets.setObjectName("LblSettingDesc")
         preset_layout.addWidget(lbl_presets)
 
-        btn_preset_it = QPushButton("+ Szablon IT & Biuro")
+        btn_preset_it = QPushButton("+ Szablon IT && Biuro")
         btn_preset_it.setObjectName("BtnPreset")
         btn_preset_it.clicked.connect(lambda: self._append_preset(self.PRESET_KEYWORDS_IT))
         preset_layout.addWidget(btn_preset_it)
@@ -200,7 +506,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(box_dict)
 
         # Sekcja: Autokorekty (zastępują initial_prompt w Parakeet)
-        box_repl = QGroupBox("✏️ Autokorekta: błędnie → poprawnie")
+        box_repl = QGroupBox("Autokorekta")
         repl_layout = QVBoxLayout(box_repl)
         lbl_repl = QLabel(
             "Parakeet nie przyjmuje promptu ze słownikiem, dlatego popularne przekręcenia nazw poprawiamy po rozpoznaniu. "
@@ -233,16 +539,8 @@ class SettingsDialog(QDialog):
         layout.addWidget(box_repl)
 
         # Sekcja: Silnik rozpoznawania mowy (Parakeet / Whisper)
-        box_engine = QGroupBox("🧠 Silnik Rozpoznawania Mowy")
+        box_engine = QGroupBox("Silnik rozpoznawania mowy")
         engine_layout = QFormLayout(box_engine)
-
-        self.combo_engine = QComboBox()
-        if WHISPER_ENABLED:
-            self.combo_engine.addItem("Automatycznie (Parakeet bez karty NVIDIA, Whisper z CUDA)", "")
-        self.combo_engine.addItem("🦜 Parakeet TDT 0.6B v3 (CPU, onnxruntime)", "parakeet")
-        if WHISPER_ENABLED:
-            self.combo_engine.addItem("Whisper (faster-whisper)", "whisper")
-        engine_layout.addRow("Silnik:", self.combo_engine)
 
         self.combo_onnx_threads = QComboBox()
         for n in (2, 3, 4):
@@ -268,7 +566,7 @@ class SettingsDialog(QDialog):
 
         lbl_engine_desc = QLabel(
             "Folder musi zawierać pliki modelu onnx-asr (encoder-model.int8.onnx, decoder_joint-model.int8.onnx, vocab.txt). "
-            "Zmiana silnika i liczby wątków działa od następnego uruchomienia transkrypcji."
+            "Model wybierasz w zakładce Nagrywanie. Zmiana liczby wątków działa od następnego uruchomienia transkrypcji."
         )
         lbl_engine_desc.setWordWrap(True)
         lbl_engine_desc.setObjectName("LblSettingDesc")
@@ -276,18 +574,18 @@ class SettingsDialog(QDialog):
         layout.addWidget(box_engine)
 
         # Sekcja: Dokładność Whispera (Beam Size)
-        box_whisper = QGroupBox("🎯 Precyzja Transkrypcji Whispera (Beam Search, tylko Whisper)")
+        box_whisper = QGroupBox("Precyzja Whispera")
         whisper_layout = QVBoxLayout(box_whisper)
 
         beam_row = QHBoxLayout()
-        lbl_beam = QLabel("Tryb przeszukiwania hipotez (Beam Size):")
+        lbl_beam = QLabel("Dokładność")
         beam_row.addWidget(lbl_beam)
 
         self.combo_beam = QComboBox()
-        self.combo_beam.addItem("⚡ Szybki (Beam Size = 1) - minimalne użycie CPU", 1)
-        self.combo_beam.addItem("⚖️ Zrównoważony (Beam Size = 3) - dobry balans", 3)
-        self.combo_beam.addItem("🚀 Maksymalna Dokładność (Beam Size = 5) [Zalecany]", 5)
-        beam_row.addWidget(self.combo_beam)
+        self.combo_beam.addItem("Szybka, najmniejsze obciążenie procesora", 1)
+        self.combo_beam.addItem("Zrównoważona", 3)
+        self.combo_beam.addItem("Maksymalna (zalecana)", 5)
+        beam_row.addWidget(self.combo_beam, stretch=1)
         whisper_layout.addLayout(beam_row)
 
         lbl_beam_desc = QLabel(
@@ -298,7 +596,7 @@ class SettingsDialog(QDialog):
         lbl_beam_desc.setObjectName("LblSettingDesc")
         whisper_layout.addWidget(lbl_beam_desc)
 
-        self.chk_adaptive_beam = QCheckBox("🚀 Automatyczny bieg turbo (Adaptacyjny Beam Size przy zatorach w kolejce)")
+        self.chk_adaptive_beam = QCheckBox("Przyspieszaj Whispera, gdy rośnie kolejka")
         self.chk_adaptive_beam.setToolTip(
             "Opcja zalecana podczas wielogodzinnych maratonów (4h–8h) na słabszych procesorach.\n"
             "Gdy w kolejce transkrypcji powstanie opóźnienie (więcej niż 1 blok), tymczasowo redukuje parametr beam_size=1,\n"
@@ -309,7 +607,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(box_whisper)
 
         layout.addStretch()
-        self.tabs.addTab(tab, "📚 Słownik i AI")
+        self.tabs.addTab(self._scrollable(tab), "Słownik i AI")
 
     def _create_tab_vad(self):
         """Karta 2: Źródła audio, czułość VAD dla mikrofonu i systemu oraz czasy sesji."""
@@ -317,20 +615,8 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(tab)
         layout.setSpacing(14)
 
-        # Sekcja: Domyślne Źródło Audio
-        box_source = QGroupBox("Domyślne Źródło Dźwięku")
-        source_layout = QFormLayout(box_source)
-        source_layout.setSpacing(10)
-
-        self.combo_default_source_mode = QComboBox()
-        self.combo_default_source_mode.addItem("🎙️+🎧 Mikrofon + Dźwięk Systemu", RecordSourceMode.HYBRID_DUAL)
-        self.combo_default_source_mode.addItem("🎙️ Tylko Mikrofon", RecordSourceMode.MIC_ONLY)
-        self.combo_default_source_mode.addItem("🎧 Tylko Dźwięk Systemu", RecordSourceMode.SYSTEM_ONLY)
-        source_layout.addRow(QLabel("Tryb nagrywania:"), self.combo_default_source_mode)
-        layout.addWidget(box_source)
-
         # Sekcja: Czułość VAD Mikrofonu
-        box_vad = QGroupBox("🎙️ Czułość Detekcji Mowy Mikrofonu")
+        box_vad = QGroupBox("Czułość mikrofonu")
         vad_layout = QVBoxLayout(box_vad)
 
         slider_row = QHBoxLayout()
@@ -349,7 +635,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(box_vad)
 
         # Sekcja: Czułość VAD Dźwięku Systemu
-        box_vad_sys = QGroupBox("🎧 Czułość Detekcji Dźwięku Systemu")
+        box_vad_sys = QGroupBox("Czułość dźwięku systemu")
         vad_sys_layout = QVBoxLayout(box_vad_sys)
 
         sys_slider_row = QHBoxLayout()
@@ -368,15 +654,9 @@ class SettingsDialog(QDialog):
         layout.addWidget(box_vad_sys)
 
         # Sekcja: Czasy i sesje
-        box_time = QGroupBox("⏱️ Zarządzanie Ciszą i Sesjami Nagrywania")
+        box_time = QGroupBox("Cisza i sesje nagrywania")
         time_layout = QFormLayout(box_time)
         time_layout.setSpacing(12)
-
-        self.spin_auto_pause = QSpinBox()
-        self.spin_auto_pause.setRange(1, 15)
-        self.spin_auto_pause.setValue(5)
-        self.spin_auto_pause.setSuffix(" sek.")
-        time_layout.addRow(QLabel("Czas ciszy do automatycznej pauzy:"), self.spin_auto_pause)
 
         self.combo_session_split = QComboBox()
         self.combo_session_split.addItem("10 minut ciągłej ciszy", 600.0)
@@ -397,7 +677,7 @@ class SettingsDialog(QDialog):
         self.combo_silence_alert.addItem("Wyłączone (Brak ostrzeżeń)", 0.0)
         time_layout.addRow(QLabel("Ostrzeżenie o braku dźwięku:"), self.combo_silence_alert)
 
-        self.btn_test_alert = QPushButton("🔔 Przetestuj powiadomienie")
+        self.btn_test_alert = QPushButton("Przetestuj powiadomienie")
         self.btn_test_alert.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_test_alert.setObjectName("BtnPreset")
         self.btn_test_alert.clicked.connect(self._on_test_alert_clicked)
@@ -405,7 +685,7 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(box_time)
         layout.addStretch()
-        self.tabs.addTab(tab, "🎙️ Audio i VAD")
+        self.tabs.addTab(self._scrollable(tab), "Audio i VAD")
 
     def _create_tab_appearance(self):
         """Karta 3: Wygląd i Personalizacja (Motywy, Czytelność, Okno)."""
@@ -423,7 +703,7 @@ class SettingsDialog(QDialog):
         self.combo_timestamp_format = self.appearance_tab.combo_timestamp_format
         self.combo_preview_order = self.appearance_tab.combo_preview_order
         self.chk_auto_scroll = self.appearance_tab.chk_auto_scroll
-        self.tabs.addTab(self.appearance_tab, "🎨 Wygląd i Personalizacja")
+        self.tabs.addTab(self.appearance_tab, "Wygląd i Personalizacja")
 
     def _create_tab_cloud(self):
         """Karta 3: Chmura, Supabase, Stanowisko i Webhook."""
@@ -431,7 +711,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(tab)
         layout.setSpacing(12)
 
-        box_ident = QGroupBox("💻 Identyfikacja Stanowiska Komputerowego")
+        box_ident = QGroupBox("Identyfikacja stanowiska")
         ident_layout = QFormLayout(box_ident)
 
         self.txt_device_name = QLineEdit()
@@ -443,7 +723,7 @@ class SettingsDialog(QDialog):
         ident_layout.addRow(QLabel("ID Organizacji:"), self.txt_org_id)
         layout.addWidget(box_ident)
 
-        box_sync = QGroupBox("☁️ Cel Synchronizacji Chmurowej (CRM / n8n / Supabase)")
+        box_sync = QGroupBox("Synchronizacja z chmurą")
         sync_layout = QFormLayout(box_sync)
 
         self.combo_sync_target = QComboBox()
@@ -473,7 +753,7 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(box_sync)
         layout.addStretch()
-        self.tabs.addTab(tab, "☁️ Chmura i Stanowisko")
+        self.tabs.addTab(self._scrollable(tab), "Chmura")
 
     def _append_preset(self, preset_text: str):
         cur = self.txt_keywords.toPlainText().strip()
@@ -549,14 +829,15 @@ class SettingsDialog(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setObjectName("SettingsScroll")
 
         tab = QWidget()
+        tab.setObjectName("SettingsScrollContent")
         layout = QVBoxLayout(tab)
         layout.setSpacing(12)
 
         # Informacja o bieżącej wersji
-        grp_cur = QGroupBox("📌 Informacje o Aplikacji")
+        grp_cur = QGroupBox("O aplikacji")
         cur_layout = QFormLayout(grp_cur)
         cur_layout.setContentsMargins(12, 12, 12, 12)
         cur_layout.setSpacing(10)
@@ -569,11 +850,11 @@ class SettingsDialog(QDialog):
         lbl_repo.setObjectName("LblSettingDesc")
         cur_layout.addRow("Repozytorium wydań:", lbl_repo)
 
-        self.chk_auto_check_startup = QCheckBox("Sprawdzaj dostępność aktualizacji automatycznie przy starcie aplikacji")
+        self.chk_auto_check_startup = QCheckBox("Sprawdzaj aktualizacje przy starcie")
         self.chk_auto_check_startup.setChecked(True)
         cur_layout.addRow("", self.chk_auto_check_startup)
 
-        self.chk_check_prereleases = QCheckBox("Uwzględniaj wersje testowe (Pre-release / Alpha / Beta)")
+        self.chk_check_prereleases = QCheckBox("Uwzględniaj wersje testowe")
         self.chk_check_prereleases.setChecked(True)
         cur_layout.addRow("", self.chk_check_prereleases)
 
@@ -581,7 +862,7 @@ class SettingsDialog(QDialog):
 
         # Pasek sprawdzania aktualizacji
         check_box = QHBoxLayout()
-        self.btn_check_updates = QPushButton("🔍 Sprawdź dostępność aktualizacji")
+        self.btn_check_updates = QPushButton("Sprawdź dostępność aktualizacji")
         self.btn_check_updates.setObjectName("BtnCheckUpdates")
         self.btn_check_updates.clicked.connect(self._on_check_updates_clicked)
         check_box.addWidget(self.btn_check_updates)
@@ -600,7 +881,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.progress_download)
 
         # Ramka z informacjami o nowej wersji (domyślnie ukryta)
-        self.grp_new_version = QGroupBox("🎉 Dostępna nowa wersja!")
+        self.grp_new_version = QGroupBox("Dostępna nowa wersja")
         new_v_layout = QVBoxLayout(self.grp_new_version)
         new_v_layout.setContentsMargins(12, 12, 12, 12)
         new_v_layout.setSpacing(8)
@@ -630,12 +911,12 @@ class SettingsDialog(QDialog):
         new_v_layout.addWidget(self.txt_changelog)
 
         btn_row = QHBoxLayout()
-        self.btn_download_update = QPushButton("🚀 Pobierz i zainstaluj aktualizację")
+        self.btn_download_update = QPushButton("Pobierz i zainstaluj aktualizację")
         self.btn_download_update.setObjectName("BtnSave")
         self.btn_download_update.clicked.connect(self._on_download_update_clicked)
         btn_row.addWidget(self.btn_download_update)
 
-        self.btn_open_release_url = QPushButton("🌐 Strona wydania na GitHubie")
+        self.btn_open_release_url = QPushButton("Strona wydania na GitHubie")
         self.btn_open_release_url.clicked.connect(self._on_open_release_url_clicked)
         btn_row.addWidget(self.btn_open_release_url)
         btn_row.addStretch()
@@ -645,7 +926,7 @@ class SettingsDialog(QDialog):
         self.grp_new_version.setVisible(False)
 
         # Przycisk opcjonalnego rozwinięcia pełnej historii zmian
-        self.btn_toggle_history = QPushButton("📜 Pokaż także historię starszych wydań...")
+        self.btn_toggle_history = QPushButton("Pokaż także historię starszych wydań...")
         self.btn_toggle_history.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_toggle_history.setObjectName("BtnPreset")
         self.btn_toggle_history.clicked.connect(self._on_toggle_history_clicked)
@@ -653,7 +934,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.btn_toggle_history)
 
         # Sekcja historii wydań (dostępna także, gdy użytkownik jest na najnowszej wersji)
-        self.grp_history = QGroupBox("📜 Historia Wydań i Zmian (Changelog)")
+        self.grp_history = QGroupBox("Historia wydań")
         history_layout = QVBoxLayout(self.grp_history)
         history_layout.setContentsMargins(12, 12, 12, 12)
         history_layout.setSpacing(8)
@@ -668,7 +949,7 @@ class SettingsDialog(QDialog):
         hist_select_row.addWidget(lbl_hist_version)
         hist_select_row.addWidget(self.combo_history_version, stretch=1)
 
-        self.btn_open_history_url = QPushButton("🌐 Strona tego wydania")
+        self.btn_open_history_url = QPushButton("Strona tego wydania")
         self.btn_open_history_url.clicked.connect(self._on_open_history_url_clicked)
         hist_select_row.addWidget(self.btn_open_history_url)
         history_layout.addLayout(hist_select_row)
@@ -682,7 +963,7 @@ class SettingsDialog(QDialog):
         self.grp_history.setVisible(False)
 
         # Sekcja diagnostyki i logów
-        self.grp_diagnostics = QGroupBox("🛠️ Diagnostyka i Dzienniki Zdarzeń (Logi)")
+        self.grp_diagnostics = QGroupBox("Diagnostyka i logi")
         diag_layout = QVBoxLayout(self.grp_diagnostics)
         diag_layout.setContentsMargins(12, 12, 12, 12)
         diag_layout.setSpacing(10)
@@ -693,7 +974,7 @@ class SettingsDialog(QDialog):
         diag_layout.addWidget(lbl_diag_desc)
 
         btn_diag_row = QHBoxLayout()
-        self.btn_open_logs = QPushButton("📁 Otwórz folder z logami")
+        self.btn_open_logs = QPushButton("Otwórz folder z logami")
         self.btn_open_logs.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_open_logs.clicked.connect(self._on_open_logs_clicked)
         btn_diag_row.addWidget(self.btn_open_logs)
@@ -703,7 +984,7 @@ class SettingsDialog(QDialog):
 
         layout.addStretch()
         scroll.setWidget(tab)
-        self.tabs.addTab(scroll, "🚀 Aktualizacje")
+        self.tabs.addTab(scroll, "Aktualizacje")
 
     def _on_check_updates_clicked(self):
         if not UPDATES_ENABLED:
@@ -723,9 +1004,9 @@ class SettingsDialog(QDialog):
         now_visible = not self.grp_history.isVisible()
         self.grp_history.setVisible(now_visible)
         if now_visible:
-            self.btn_toggle_history.setText("🙈 Ukryj historię starszych wydań")
+            self.btn_toggle_history.setText("Ukryj historię starszych wydań")
         else:
-            self.btn_toggle_history.setText("📜 Pokaż także historię starszych wydań...")
+            self.btn_toggle_history.setText("Pokaż także historię starszych wydań...")
 
     def _populate_history_combo(self, all_rels: list):
         """Wypełnia listę rozwijaną historii wydań i ustawia treść Markdown."""
@@ -841,7 +1122,7 @@ class SettingsDialog(QDialog):
             if all_rels:
                 self._populate_history_combo(all_rels)
                 self.btn_toggle_history.setVisible(True)
-                self.btn_toggle_history.setText("📜 Pokaż także historię starszych wydań...")
+                self.btn_toggle_history.setText("Pokaż także historię starszych wydań...")
             else:
                 self.btn_toggle_history.setVisible(False)
 
@@ -857,7 +1138,7 @@ class SettingsDialog(QDialog):
                 self.lbl_update_status.setStyleSheet("color: #10b981; font-size: 11px; font-weight: bold;")
             else:
                 self._cached_zip_path = None
-                self.btn_download_update.setText("🚀 Pobierz i zainstaluj aktualizację")
+                self.btn_download_update.setText("Pobierz i zainstaluj aktualizację")
         else:
             self.grp_new_version.setVisible(False)
             self.btn_toggle_history.setVisible(False)
@@ -962,8 +1243,14 @@ class SettingsDialog(QDialog):
         if idx != -1:
             self.combo_beam.setCurrentIndex(idx)
         self.chk_adaptive_beam.setChecked(bool(st.get("adaptive_beam_size", False)))
-        e_idx = self.combo_engine.findData(str(st.get("asr_engine", "")).strip().lower())
-        self.combo_engine.setCurrentIndex(e_idx if e_idx != -1 else 0)
+        engine = str(st.get("asr_engine", "")).strip().lower()
+        model_key = "" if (not engine and WHISPER_ENABLED) else get_default_model_id()
+        m_idx = self.combo_model.findData(model_key)
+        self.combo_model.setCurrentIndex(m_idx if m_idx != -1 else 0)
+        self._on_model_changed()
+        self._fill_microphones(selected_name=str(st.get("mic_device_name", "")).strip())
+        self._fill_loopbacks(selected_index=str(st.get("loopback_device_index", "")).strip())
+        self._fill_target_apps(selected_exe=str(st.get("target_app_filter", "")).strip())
         t_idx0 = self.combo_onnx_threads.findData(max(2, min(4, int(st.get("onnx_threads", 3)))))
         self.combo_onnx_threads.setCurrentIndex(t_idx0 if t_idx0 != -1 else 1)
         self.chk_polish_only.setChecked(bool(st.get("polish_only_filter", True)))
@@ -987,7 +1274,8 @@ class SettingsDialog(QDialog):
         self.slider_vad_sys.setValue(vad_sys_val)
         self._on_vad_sys_slider_changed(vad_sys_val)
 
-        self.spin_auto_pause.setValue(int(float(st.get("auto_pause_sec", 5.0))))
+        self.slider_auto_pause.setValue(int(float(st.get("auto_pause_sec", 5.0))))
+        self._on_rec_mode_changed()
 
         split_sec = float(st.get("session_split_silence_sec", 900.0))
         s_idx = self.combo_session_split.findData(split_sec)
@@ -1065,6 +1353,8 @@ class SettingsDialog(QDialog):
         """Przełącza aktywną zakładkę w oknie ustawień."""
         if isinstance(tab_id, int):
             self.tabs.setCurrentIndex(tab_id)
+        elif str(tab_id).lower() in ("recording", "nagrywanie", "audio_sources"):
+            self.tabs.setCurrentIndex(0)
         elif str(tab_id).lower() in ("updates", "aktualizacje"):
             for i in range(self.tabs.count()):
                 text = self.tabs.tabText(i).lower()
@@ -1092,7 +1382,7 @@ class SettingsDialog(QDialog):
             self.combo_default_source_mode.setCurrentIndex(self.combo_default_source_mode.findData(RecordSourceMode.HYBRID_DUAL))
             self.slider_vad.setValue(42)
             self.slider_vad_sys.setValue(42)
-            self.spin_auto_pause.setValue(5)
+            self.slider_auto_pause.setValue(5)
             self.combo_session_split.setCurrentIndex(self.combo_session_split.findData(900.0))
             self.combo_silence_alert.setCurrentIndex(self.combo_silence_alert.findData(5.0))
             if hasattr(self, "appearance_tab"):
@@ -1102,7 +1392,7 @@ class SettingsDialog(QDialog):
             self.chk_check_prereleases.setChecked(True)
             self.chk_auto_check_startup.setChecked(True)
             self.chk_adaptive_beam.setChecked(False)
-            self.combo_engine.setCurrentIndex(0)
+            self.combo_model.setCurrentIndex(0)
             self.combo_onnx_threads.setCurrentIndex(self.combo_onnx_threads.findData(3))
             self.chk_polish_only.setChecked(True)
             self.txt_parakeet_path.clear()
@@ -1113,7 +1403,12 @@ class SettingsDialog(QDialog):
             "custom_keywords": self.txt_keywords.toPlainText().strip(),
             "whisper_beam_size": int(self.combo_beam.currentData() or 5),
             "adaptive_beam_size": self.chk_adaptive_beam.isChecked(),
-            "asr_engine": self.combo_engine.currentData() or "",
+            **self._selected_model_settings(),
+            "mic_device_name": self.combo_mic.currentData() or "",
+            "mic_device_label": self.combo_mic.currentText() if self.combo_mic.currentData() else "",
+            "loopback_device_index": self.combo_loopback.currentData() or "",
+            "loopback_device_label": self.combo_loopback.currentText() if self.combo_loopback.currentData() else "",
+            "target_app_filter": self.combo_target_app.currentData() or "",
             "onnx_threads": int(self.combo_onnx_threads.currentData() or 3),
             "polish_only_filter": self.chk_polish_only.isChecked(),
             "parakeet_model_path": self.txt_parakeet_path.text().strip(),
@@ -1122,7 +1417,7 @@ class SettingsDialog(QDialog):
             "record_source_mode": self.combo_default_source_mode.currentData() or RecordSourceMode.HYBRID_DUAL,
             "vad_speech_threshold": round(self.slider_vad.value() / 100.0, 2),
             "system_vad_speech_threshold": round(self.slider_vad_sys.value() / 100.0, 2),
-            "auto_pause_sec": float(self.spin_auto_pause.value()),
+            "auto_pause_sec": float(self.slider_auto_pause.value()),
             "session_split_silence_sec": float(self.combo_session_split.currentData() or 900.0),
             "silence_alert_minutes": float(self.combo_silence_alert.currentData() if self.combo_silence_alert.currentData() is not None else 5.0),
             "timestamp_format": self.combo_timestamp_format.currentData() or "offset_only",
@@ -1204,13 +1499,13 @@ class UpdatePromptDialog(QDialog):
         layout.addLayout(header)
 
         # Przyciski ułożone pionowo – zero obcinania tekstu
-        self.btn_restart_now = QPushButton("⚡  Zaktualizuj i zrestartuj teraz")
+        self.btn_restart_now = QPushButton("Zaktualizuj i zrestartuj teraz")
         self.btn_restart_now.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_restart_now.setObjectName("BtnSave")
         self.btn_restart_now.clicked.connect(self._choose_restart_now)
         layout.addWidget(self.btn_restart_now)
 
-        self.btn_on_exit = QPushButton("💤  Zainstaluj przy zamknięciu programu")
+        self.btn_on_exit = QPushButton("Zainstaluj przy zamknięciu programu")
         self.btn_on_exit.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_on_exit.setObjectName("BtnPreset")
         self.btn_on_exit.clicked.connect(self._choose_on_exit)

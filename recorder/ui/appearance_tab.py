@@ -150,7 +150,7 @@ class AppearanceTab(QWidget):
         # ---------------------------------------------------------------------
         # 1. Sekcja: Wybór Motywu Aplikacji
         # ---------------------------------------------------------------------
-        grp_theme = QGroupBox("🎨 Wybór Motywu Aplikacji")
+        grp_theme = QGroupBox("Motyw aplikacji")
         grp_theme.setObjectName("GrpThemeSelection")
         theme_grid = QGridLayout(grp_theme)
         theme_grid.setSpacing(10)
@@ -172,7 +172,7 @@ class AppearanceTab(QWidget):
         # ---------------------------------------------------------------------
         # 2. Sekcja: Podgląd i Czytelność Transkrypcji
         # ---------------------------------------------------------------------
-        grp_view = QGroupBox("🔤 Podgląd i Czytelność")
+        grp_view = QGroupBox("Podgląd i czytelność")
         grp_view.setObjectName("GrpPreviewOptions")
         view_layout = QVBoxLayout(grp_view)
         view_layout.setSpacing(10)
