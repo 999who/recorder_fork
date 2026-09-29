@@ -85,6 +85,32 @@ def get_site_packages_modules() -> list[str]:
     return sorted(list(modules))
 
 
+def verify_bundle(output_folder: str) -> bool:
+    """
+    Sprawdza paczkę po kompilacji: musi zawierać onnxruntime i model Silero VAD (ONNX),
+    a nie powinna zawierać torch. Brak którejś z wymaganych rzeczy przerywa build z błędem.
+    """
+    root = os.path.join(output_folder, "_internal")
+    if not os.path.isdir(root):
+        root = output_folder
+
+    has_ort = os.path.isdir(os.path.join(root, "onnxruntime"))
+    has_vad = os.path.exists(os.path.join(root, "recorder", "resources", "vad", "silero_vad.onnx"))
+    has_onnx_asr = os.path.isdir(os.path.join(root, "onnx_asr"))
+    has_torch = os.path.isdir(os.path.join(root, "torch"))
+
+    print("\n🔎 Weryfikacja paczki:")
+    print(f"   onnxruntime:        {'OK' if has_ort else 'BRAK'}")
+    print(f"   onnx_asr:           {'OK' if has_onnx_asr else 'BRAK'}")
+    print(f"   silero_vad.onnx:    {'OK' if has_vad else 'BRAK'}")
+    print(f"   torch (niepotrzebny): {'OBECNY - usuń torch ze środowiska budowania' if has_torch else 'brak (OK)'}")
+
+    ok = has_ort and has_onnx_asr and has_vad
+    if has_torch:
+        print("⚠️ W paczce jest torch. Zbuduj z czystego środowiska: pip install -r requirements.txt")
+    return ok
+
+
 def main():
     # Inicjalizacja automatycznego zapisu logu do pliku build_log.txt
     tee = TeeLogger(LOG_FILE, sys.stdout)
@@ -129,41 +155,16 @@ def main():
     site_modules = get_site_packages_modules()
     print(f"📚 Automatycznie zebrano {len(site_modules)} modułów z site-packages do spakowania.")
 
-    # Kluczowe biblioteki AI wymagające pełnego pakowania (wraz z plikami danych i bibliotekami C/C++)
+    # Kluczowe biblioteki AI wymagające pełnego pakowania (wraz z plikami danych i bibliotekami C/C++).
+    # Aplikacja nie używa torch: Silero VAD i Parakeet działają na onnxruntime, Whisper na ctranslate2.
     core_ai_collect = [
         "faster_whisper",
-        "silero_vad",
-        "pyannote",
-        "pyannote.audio",
-        "pyannote.core",
-        "pyannote.pipeline",
-        "pyannote.metrics",
-        "pyannote.database",
-        "asteroid_filterbanks",
-        "julius",
-        "torch_audiomentations",
-        "torch_pitch_shift",
-        "hyperpyyaml",
-        "omegaconf",
-        "einops",
-        "semver",
-        "sentencepiece",
-        "pytorch_metric_learning",
         "ctranslate2",
+        "onnxruntime",
+        "onnx_asr",
+        "huggingface_hub",
         "sounddevice",
         "imageio_ffmpeg",
-        "speechbrain",
-        "lightning",
-        "lightning_fabric",
-        "lightning_utilities",
-        "pytorch_lightning",
-        "torchmetrics",
-        "safetensors",
-        "huggingface_hub",
-        "optuna",
-        "torch",
-        "torchaudio",
-        "onnxruntime",
         "scipy"
     ]
 
@@ -193,17 +194,20 @@ def main():
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--name=InteligentnyDyktafonAI",
-        "--onedir",                       # Folder z plikami DLL (najstabilniejszy dla modeli PyTorch/Whisper)
+        "--onedir",                       # Folder z plikami DLL (najstabilniejszy dla modeli onnxruntime/ctranslate2)
         "--clean",
         "--noconfirm",
         "--noconsole",                    # Wersja produkcyjna uruchamia się bez okna konsoli
         
-        # Wykluczamy PyQt6, ponieważ aplikacja używa PySide6 (zapobiega konfliktom dwóch bibliotek Qt)
+        # Wykluczamy PyQt6 (aplikacja używa wyłącznie PySide6) oraz torch (nie jest już potrzebny,
+        # a jego przypadkowe zainstalowanie w środowisku zwiększyłoby paczkę o kilkaset MB)
         "--exclude-module=PyQt6",
         "--exclude-module=PyQt6.QtCore",
         "--exclude-module=PyQt6.QtWidgets",
         "--exclude-module=PyQt6.QtGui",
         "--exclude-module=PyQt6_sip",
+        "--exclude-module=torch",
+        "--exclude-module=torchaudio",
 
         # Zbieranie zależności i bibliotek C++/DLL dla wszystkich modułów AI
         *[
@@ -211,26 +215,19 @@ def main():
             for pkg in modules_to_collect
         ],
 
-        # Dołączenie ukrytych importów, które mogą być ładowane dynamicznie przez HuggingFace/PyTorch Hub
+        # Ukryte importy ładowane dynamicznie (onnx-asr wybiera klasę modelu i pobiera pliki przez huggingface_hub)
         *[
             f"--hidden-import={pkg}"
             for pkg in [
-                "asteroid_filterbanks",
-                "julius",
-                "torch_audiomentations",
-                "torch_pitch_shift",
-                "hyperpyyaml",
-                "omegaconf",
-                "einops",
-                "semver",
-                "sentencepiece",
-                "pytorch_metric_learning",
-                "safetensors",
-                "optuna"
+                "onnx_asr",
+                "onnx_asr.models.nemo",
+                "onnx_asr.preprocessors.numpy_preprocessor",
+                "onnxruntime",
+                "huggingface_hub"
             ]
-            if _is_module_available(pkg)
+            if _is_module_available(pkg.split('.')[0])
         ],
-        
+
         # Automatyczne dołączenie metadanych dla 100% wykrytych pakietów w środowisku!
         *[
             f"--copy-metadata={dist_name}"
@@ -279,6 +276,10 @@ def main():
                 print("🔒 Usunięto prywatny plik .env z paczki produkcyjnej (dla bezpieczeństwa release'u).")
             except Exception:
                 pass
+
+        if not verify_bundle(output_folder):
+            print("\n❌ Paczka jest niekompletna (patrz lista powyżej).")
+            sys.exit(1)
 
         print("\n" + "=" * 70)
         print("🎉 SUKCES! Aplikacja została pomyślnie skompilowana!")

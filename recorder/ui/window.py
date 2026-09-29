@@ -1377,6 +1377,7 @@ class SmartDictaphoneWindow(QMainWindow):
             except Exception:
                 pass
 
+        self._asr_error_shown = False
         # Uruchomienie silnika asynchronicznego przetwarzania bloków w tle (Rolling Background Transcriber)
         self.rolling_worker = RollingTranscriptionWorker(
             model_size=selected_model,
@@ -1479,6 +1480,21 @@ class SmartDictaphoneWindow(QMainWindow):
     def _on_rolling_error(self, err_msg):
         if sys.stderr:
             print(f"Błąd transkrypcji w tle: {err_msg}", file=sys.stderr)
+        logger.error(f"[TRANSKRYPCJA W TLE] {err_msg}")
+        self.progress_transcription.setFormat("🔴 Silnik rozpoznawania mowy nie działa - zobacz komunikat błędu")
+
+        # Jeden komunikat na sesję nagrywania (kolejne błędy trafiają tylko do logu)
+        if getattr(self, "_asr_error_shown", False):
+            return
+        self._asr_error_shown = True
+        hint = ""
+        if self.combo_models.currentData() == PARAKEET_MODEL_ID:
+            hint = (
+                "\n\nPrzy pierwszym uruchomieniu Parakeet pobiera model z internetu. Jeśli komputer nie ma dostępu "
+                "do sieci, pobierz model ręcznie i wskaż jego folder w Ustawienia → Słownik i AI → "
+                "'Lokalny model Parakeet'."
+            )
+        QMessageBox.warning(self, "Silnik rozpoznawania mowy", f"Nie udało się uruchomić transkrypcji:\n{err_msg}{hint}")
 
     def _on_pause_clicked(self):
         self.worker.toggle_manual_pause()
