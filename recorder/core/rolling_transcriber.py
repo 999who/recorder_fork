@@ -8,13 +8,11 @@ from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from PySide6.QtCore import QThread, Signal as pyqtSignal
 
-from recorder.core.transcriber import TranscriberEngine
+from recorder.core.asr_engine import create_asr_engine
 from recorder.core.diarizer import format_transcript_without_diarization
 from recorder.core.speakers import format_turns, suggest_speaker_names
 from recorder.config import (
-    DEFAULT_WHISPER_MODEL,
-    DEFAULT_BEAM_SIZE,
-    DEFAULT_INITIAL_PROMPT,
+    get_default_model_id,
     get_beam_size,
     is_adaptive_beam_size,
     get_theme,
@@ -55,10 +53,10 @@ class RollingTranscriptionWorker(QThread):
     finished_signal = pyqtSignal(str, str, list)  # (final_html, final_plain, all_turns)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, model_size: str = DEFAULT_WHISPER_MODEL, txt_save_path: Optional[str] = None,
+    def __init__(self, model_size: Optional[str] = None, txt_save_path: Optional[str] = None,
                  session_start_time: Optional[Union[datetime, float, int]] = None):
         super().__init__()
-        self.model_size = model_size
+        self.model_size = model_size or get_default_model_id()
         self.txt_save_path = txt_save_path
         if isinstance(session_start_time, (int, float)):
             try:
@@ -68,7 +66,7 @@ class RollingTranscriptionWorker(QThread):
         self.session_start_time = session_start_time  # Realna godzina startu sesji (do timestampów z godziną)
         self.block_queue: queue.Queue = queue.Queue()
         self._is_running: bool = False
-        self.transcriber = TranscriberEngine(model_size=self.model_size)
+        self.transcriber = create_asr_engine(model_size=self.model_size)
         
         self.processed_blocks: List[RollingBlock] = []
         self.all_turns: List[Dict[str, Any]] = []

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTabWidget, QWidget, QTextEdit, QTextBrowser, QComboBox,
     QSlider, QSpinBox, QCheckBox, QGroupBox, QFormLayout,
-    QMessageBox, QFrame, QSizePolicy, QProgressBar, QScrollArea
+    QMessageBox, QFrame, QSizePolicy, QProgressBar, QScrollArea, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal as pyqtSignal, QUrl
 from PySide6.QtGui import QFont, QIcon, QDesktopServices
@@ -195,8 +195,42 @@ class SettingsDialog(QDialog):
         dict_layout.addLayout(preset_layout)
         layout.addWidget(box_dict)
 
+        # Sekcja: Silnik rozpoznawania mowy (Parakeet / Whisper)
+        box_engine = QGroupBox("🧠 Silnik Rozpoznawania Mowy")
+        engine_layout = QFormLayout(box_engine)
+
+        self.combo_engine = QComboBox()
+        self.combo_engine.addItem("Automatycznie (Parakeet bez karty NVIDIA, Whisper z CUDA)", "")
+        self.combo_engine.addItem("🦜 Parakeet TDT 0.6B v3 (CPU, onnxruntime)", "parakeet")
+        self.combo_engine.addItem("Whisper (faster-whisper)", "whisper")
+        engine_layout.addRow("Silnik:", self.combo_engine)
+
+        self.combo_onnx_threads = QComboBox()
+        for n in (2, 3, 4):
+            self.combo_onnx_threads.addItem(f"{n} wątki", n)
+        self.combo_onnx_threads.setToolTip("Liczba wątków onnxruntime używanych przez Parakeet. Mniej wątków = niższe obciążenie CPU.")
+        engine_layout.addRow("Wątki Parakeet:", self.combo_onnx_threads)
+
+        path_row = QHBoxLayout()
+        self.txt_parakeet_path = QLineEdit()
+        self.txt_parakeet_path.setPlaceholderText("Puste = pobranie modelu z internetu przy pierwszym uruchomieniu")
+        path_row.addWidget(self.txt_parakeet_path, stretch=1)
+        self.btn_parakeet_path = QPushButton("Wybierz folder...")
+        self.btn_parakeet_path.clicked.connect(self._on_choose_parakeet_path)
+        path_row.addWidget(self.btn_parakeet_path)
+        engine_layout.addRow("Lokalny model Parakeet:", path_row)
+
+        lbl_engine_desc = QLabel(
+            "Folder musi zawierać pliki modelu onnx-asr (encoder-model.int8.onnx, decoder_joint-model.int8.onnx, vocab.txt). "
+            "Zmiana silnika i liczby wątków działa od następnego uruchomienia transkrypcji."
+        )
+        lbl_engine_desc.setWordWrap(True)
+        lbl_engine_desc.setObjectName("LblSettingDesc")
+        engine_layout.addRow(lbl_engine_desc)
+        layout.addWidget(box_engine)
+
         # Sekcja: Dokładność Whispera (Beam Size)
-        box_whisper = QGroupBox("🎯 Precyzja Transkrypcji Whispera (Beam Search)")
+        box_whisper = QGroupBox("🎯 Precyzja Transkrypcji Whispera (Beam Search, tylko Whisper)")
         whisper_layout = QVBoxLayout(box_whisper)
 
         beam_row = QHBoxLayout()
@@ -423,6 +457,12 @@ class SettingsDialog(QDialog):
             self.txt_keywords.setPlainText(f"{cur} {preset_text}")
         else:
             self.txt_keywords.setPlainText(preset_text)
+
+    def _on_choose_parakeet_path(self):
+        """Wybór lokalnego folderu z modelem Parakeet."""
+        folder = QFileDialog.getExistingDirectory(self, "Wybierz folder z modelem Parakeet", self.txt_parakeet_path.text())
+        if folder:
+            self.txt_parakeet_path.setText(folder)
 
     def _toggle_hf_visibility(self):
         if self.txt_hf_token.echoMode() == QLineEdit.EchoMode.Password:
@@ -881,6 +921,11 @@ class SettingsDialog(QDialog):
             self.combo_beam.setCurrentIndex(idx)
         self.txt_hf_token.setText(st.get("hf_token", ""))
         self.chk_adaptive_beam.setChecked(bool(st.get("adaptive_beam_size", False)))
+        e_idx = self.combo_engine.findData(str(st.get("asr_engine", "")).strip().lower())
+        self.combo_engine.setCurrentIndex(e_idx if e_idx != -1 else 0)
+        t_idx0 = self.combo_onnx_threads.findData(max(2, min(4, int(st.get("onnx_threads", 3)))))
+        self.combo_onnx_threads.setCurrentIndex(t_idx0 if t_idx0 != -1 else 1)
+        self.txt_parakeet_path.setText(str(st.get("parakeet_model_path", "")))
 
         # Źródło Audio & VAD
         src_mode = st.get("record_source_mode", RecordSourceMode.HYBRID_DUAL)
@@ -1011,6 +1056,9 @@ class SettingsDialog(QDialog):
             self.chk_check_prereleases.setChecked(True)
             self.chk_auto_check_startup.setChecked(True)
             self.chk_adaptive_beam.setChecked(False)
+            self.combo_engine.setCurrentIndex(0)
+            self.combo_onnx_threads.setCurrentIndex(self.combo_onnx_threads.findData(3))
+            self.txt_parakeet_path.clear()
 
     def _save_and_accept(self):
         """Zapisuje wartości do pliku user_settings.json i zamyka dialog."""
@@ -1018,6 +1066,9 @@ class SettingsDialog(QDialog):
             "custom_keywords": self.txt_keywords.toPlainText().strip(),
             "whisper_beam_size": int(self.combo_beam.currentData() or 5),
             "adaptive_beam_size": self.chk_adaptive_beam.isChecked(),
+            "asr_engine": self.combo_engine.currentData() or "",
+            "onnx_threads": int(self.combo_onnx_threads.currentData() or 3),
+            "parakeet_model_path": self.txt_parakeet_path.text().strip(),
             "hf_token": self.txt_hf_token.text().strip(),
             "record_source_mode": self.combo_default_source_mode.currentData() or RecordSourceMode.HYBRID_DUAL,
             "vad_speech_threshold": round(self.slider_vad.value() / 100.0, 2),

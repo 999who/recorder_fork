@@ -19,7 +19,7 @@ from recorder.config import (
     VAD_SPEECH_THRESHOLD,
     PRE_SPEECH_BUFFER_CHUNKS,
     RMS_SILENCE_THRESHOLD,
-    DEFAULT_WHISPER_MODEL,
+    get_default_model_id,
     SESSION_SPLIT_SILENCE_SEC,
     LIVE_BLOCK_MIN_SEC,
     LIVE_BLOCK_MAX_SEC,
@@ -35,7 +35,7 @@ from recorder.audio.capture import save_wav_file, StreamingWavWriter
 from recorder.audio.converter import resample_to_16k, prepare_audio_file
 from recorder.audio.devices import HAS_PYAUDIOWPATCH, TargetAppAudioMonitor, clean_device_name
 from recorder.core.vad import SileroVADDetector, is_silero_available
-from recorder.core.transcriber import TranscriberEngine
+from recorder.core.asr_engine import create_asr_engine
 from recorder.core.diarizer import DiarizationEngine, format_transcript_without_diarization
 
 try:
@@ -1259,12 +1259,12 @@ class LiveTranscriptionWorker(QThread):
     status_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, model_size=DEFAULT_WHISPER_MODEL):
+    def __init__(self, model_size=None):
         super().__init__()
-        self.model_size = model_size
+        self.model_size = model_size or get_default_model_id()
         self.audio_queue = queue.Queue()
         self._is_running = False
-        self.transcriber = TranscriberEngine(model_size=self.model_size)
+        self.transcriber = create_asr_engine(model_size=self.model_size)
 
     def add_phrase_chunk(self, audio_data, samplerate, start_sec: float = 0.0):
         if self._is_running:
@@ -1285,9 +1285,9 @@ class LiveTranscriptionWorker(QThread):
         self._is_running = True
         recent_context = ""
         try:
-            self.status_signal.emit(f"Ładowanie modelu Whisper ({self.model_size})...")
-            self.transcriber.load_model()
-            self.status_signal.emit(f"Whisper Na Żywo [{self.model_size}]: GOTOWY")
+            self.status_signal.emit(f"Ładowanie silnika {self.transcriber.display_name}...")
+            self.transcriber.load_model(status_cb=self.status_signal.emit)
+            self.status_signal.emit(f"Transkrypcja na żywo [{self.transcriber.display_name}]: GOTOWA")
 
             while self._is_running:
                 try:
@@ -1346,7 +1346,7 @@ class TranscriptionWorker(QThread):
         self,
         audio_path: str,
         hf_token: str,
-        model_size: str = DEFAULT_WHISPER_MODEL,
+        model_size: Optional[str] = None,
         enable_diarization: bool = True,
         num_speakers: Optional[int] = None,
         min_speakers: Optional[int] = None,
@@ -1363,8 +1363,9 @@ class TranscriptionWorker(QThread):
 
     def run(self):
         try:
-            self.progress_signal.emit(10, f"Ładowanie modelu Whisper ({self.model_size})...")
-            transcriber = TranscriberEngine(model_size=self.model_size)
+            transcriber = create_asr_engine(model_size=self.model_size)
+            self.progress_signal.emit(10, f"Ładowanie silnika {transcriber.display_name}...")
+            transcriber.load_model(status_cb=lambda msg: self.progress_signal.emit(10, msg))
             
             self.progress_signal.emit(30, "Trwa transkrypcja audio...")
             transcript_words = transcriber.transcribe_file_with_words(self.audio_path, language="pl")
@@ -1431,7 +1432,7 @@ class FileProcessingWorker(QThread):
         input_file_path: str,
         recordings_dir: str,
         hf_token: Optional[str] = None,
-        model_size: str = DEFAULT_WHISPER_MODEL,
+        model_size: Optional[str] = None,
         enable_diarization: bool = True,
         num_speakers: Optional[int] = None,
         min_speakers: Optional[int] = None,
@@ -1460,10 +1461,11 @@ class FileProcessingWorker(QThread):
             mins = int(duration_sec // 60)
             secs = int(duration_sec % 60)
             print(f"🎵 [PLIK] Audio przygotowane: {prepared_wav_path} (Długość: {mins}m {secs}s)")
-            self.progress_signal.emit(15, f"Etap 1/3: Audio gotowe ({mins}m {secs}s). Ładowanie Whisper ({self.model_size})...")
+            transcriber = create_asr_engine(model_size=self.model_size)
+            self.progress_signal.emit(15, f"Etap 1/3: Audio gotowe ({mins}m {secs}s). Ładowanie silnika {transcriber.display_name}...")
 
-            # ETAP 2: Transkrypcja Faster-Whisper z raportowaniem postępu
-            transcriber = TranscriberEngine(model_size=self.model_size)
+            # ETAP 2: Transkrypcja wybranym silnikiem z raportowaniem postępu
+            transcriber.load_model(status_cb=lambda msg: self.progress_signal.emit(15, msg))
 
             def on_whisper_progress(ratio: float, cur_time_sec: float):
                 pct = int(20 + ratio * 40)
@@ -1471,7 +1473,7 @@ class FileProcessingWorker(QThread):
                 cur_secs = int(cur_time_sec % 60)
                 self.progress_signal.emit(
                     pct,
-                    f"Etap 2/3: Transkrypcja Whisper ({cur_mins}m {cur_secs}s / {mins}m {secs}s - {int(ratio * 100)}%)..."
+                    f"Etap 2/3: Transkrypcja ({cur_mins}m {cur_secs}s / {mins}m {secs}s - {int(ratio * 100)}%)..."
                 )
 
             self.progress_signal.emit(20, "Etap 2/3: Rozpoczynanie transkrypcji mowy...")

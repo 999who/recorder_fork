@@ -27,6 +27,10 @@ from recorder.config import (
     SAMPLE_RATE,
     DEFAULT_AUTO_PAUSE_SEC,
     WHISPER_MODELS,
+    save_user_settings,
+    ASR_MODELS,
+    get_default_model_id,
+    PARAKEET_MODEL_ID,
     DEFAULT_WHISPER_MODEL,
     get_hardware_acceleration_info,
     SPEAKER_COUNT_OPTIONS,
@@ -544,7 +548,7 @@ class SmartDictaphoneWindow(QMainWindow):
         main_layout.addWidget(sources_box)
 
         # WYBÓR MODELU FASTER-WHISPER I AKCELERACJA SPRZĘTOWA
-        model_box = QGroupBox("Model Transkrypcji AI (Faster-Whisper)")
+        model_box = QGroupBox("Silnik Rozpoznawania Mowy (Parakeet / Whisper)")
         model_layout = QVBoxLayout(model_box)
 
         model_row = QHBoxLayout()
@@ -552,10 +556,10 @@ class SmartDictaphoneWindow(QMainWindow):
         lbl_model_prefix.setFont(QFont("Segoe UI", 9, QFont.Weight.Medium))
         self.combo_models = QComboBox()
         
-        for m_id, m_info in WHISPER_MODELS.items():
+        for m_id, m_info in ASR_MODELS.items():
             self.combo_models.addItem(m_info["label"], userData=m_id)
 
-        default_idx = self.combo_models.findData(DEFAULT_WHISPER_MODEL)
+        default_idx = self.combo_models.findData(get_default_model_id())
         if default_idx != -1:
             self.combo_models.setCurrentIndex(default_idx)
 
@@ -570,7 +574,7 @@ class SmartDictaphoneWindow(QMainWindow):
         model_row.addWidget(self.btn_auto_detect)
         model_layout.addLayout(model_row)
 
-        self.lbl_model_desc = QLabel(WHISPER_MODELS.get(DEFAULT_WHISPER_MODEL, {}).get("desc", ""))
+        self.lbl_model_desc = QLabel(ASR_MODELS.get(get_default_model_id(), {}).get("desc", ""))
         self.lbl_model_desc.setObjectName("ModelDescLabel")
         model_layout.addWidget(self.lbl_model_desc)
 
@@ -1353,8 +1357,18 @@ class SmartDictaphoneWindow(QMainWindow):
 
     def _on_model_selection_changed(self, index):
         model_id = self.combo_models.currentData()
-        if model_id in WHISPER_MODELS:
-            self.lbl_model_desc.setText(WHISPER_MODELS[model_id]["desc"])
+        if model_id in ASR_MODELS:
+            self.lbl_model_desc.setText(ASR_MODELS[model_id]["desc"])
+        self._persist_engine_choice(model_id)
+
+    def _persist_engine_choice(self, model_id):
+        """Zapamiętuje wybór silnika i modelu w user_settings.json, aby był domyślny przy kolejnym starcie."""
+        if not model_id or model_id not in ASR_MODELS:
+            return
+        if model_id == PARAKEET_MODEL_ID:
+            save_user_settings({"asr_engine": "parakeet"})
+        else:
+            save_user_settings({"asr_engine": "whisper", "default_whisper_model": model_id})
 
     def _on_auto_detect_clicked(self):
         profile = get_recommended_profile()
@@ -1429,7 +1443,7 @@ class SmartDictaphoneWindow(QMainWindow):
         except Exception:
             pass
 
-        selected_model = self.combo_models.currentData() or DEFAULT_WHISPER_MODEL
+        selected_model = self.combo_models.currentData() or get_default_model_id()
 
         # Inicjalizacja sesji w Supabase dla transmisji na żywo do CRM
         if self.cloud_sync.config.get("live_streaming") and self.cloud_sync.config.get("auto_sync"):
@@ -1759,7 +1773,7 @@ class SmartDictaphoneWindow(QMainWindow):
 
         token = self.input_token.text().strip()
         filename = os.path.basename(file_path)
-        selected_model = self.combo_models.currentData() or DEFAULT_WHISPER_MODEL
+        selected_model = self.combo_models.currentData() or get_default_model_id()
         enable_diar = self.check_enable_diarization.isChecked()
         spk_cfg = self.combo_speakers.currentData() or {}
         num_spk = spk_cfg.get("num_speakers")

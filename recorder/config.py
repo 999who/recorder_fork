@@ -129,6 +129,21 @@ WHISPER_MODELS = {
 
 DEFAULT_WHISPER_MODEL = "large-v3-turbo"
 
+# Identyfikator pozycji Parakeet na liście modeli w interfejsie (obok modeli Whisper)
+PARAKEET_MODEL_ID = "parakeet"
+
+# Wszystkie modele wybierane w interfejsie: Parakeet (domyślny bez CUDA) oraz modele Whisper
+ASR_MODELS = {
+    PARAKEET_MODEL_ID: {
+        "id": PARAKEET_MODEL_ID,
+        "name": "parakeet-tdt-0.6b-v3",
+        "label": "🦜 Parakeet TDT 0.6B v3 (Zalecany na CPU)",
+        "desc": "Silnik NVIDIA Parakeet (onnxruntime, int8): koszt proporcjonalny do długości dźwięku, "
+                "dobry dla języka polskiego, bez karty graficznej. Model pobierany jest przy pierwszym uruchomieniu."
+    },
+    **WHISPER_MODELS,
+}
+
 
 def get_env_variable(key: str, default: str = "") -> str:
     """
@@ -226,6 +241,9 @@ def load_user_settings(force_reload: bool = False) -> dict:
         "check_prereleases": True,
         "auto_check_updates_startup": True,
         "adaptive_beam_size": False,
+        "asr_engine": get_env_variable("ASR_ENGINE", ""),  # "" = automatycznie (Parakeet bez CUDA, Whisper z CUDA)
+        "onnx_threads": int(get_env_variable("ONNX_THREADS", "3")),
+        "parakeet_model_path": get_env_variable("PARAKEET_MODEL_PATH", ""),
         "theme": get_env_variable("APP_THEME", "classic_dark"),
         "font_size": int(get_env_variable("TRANSCRIPT_FONT_SIZE", "13")),
         "always_on_top": get_env_variable("ALWAYS_ON_TOP", "false").lower() in ("1", "true", "yes"),
@@ -299,6 +317,36 @@ def is_adaptive_beam_size() -> bool:
     """Zwraca czy adaptacyjny dobór beam_size (bieg turbo przy zatorach w kolejce) jest włączony."""
     st = load_user_settings()
     return bool(st.get("adaptive_beam_size", False))
+
+
+def get_asr_engine() -> str:
+    """Zwraca aktywny silnik rozpoznawania mowy: 'parakeet' lub 'whisper' (bez ustawienia: Parakeet bez CUDA)."""
+    eid = str(load_user_settings().get("asr_engine", "")).strip().lower()
+    if eid in ("parakeet", "whisper"):
+        return eid
+    return "whisper" if get_hardware_acceleration_info().get("is_cuda") else "parakeet"
+
+
+def get_onnx_threads() -> int:
+    """Liczba wątków onnxruntime dla Parakeet (ograniczona do 2-4)."""
+    try:
+        return max(2, min(4, int(load_user_settings().get("onnx_threads", 3))))
+    except Exception:
+        return 3
+
+
+def get_parakeet_model_path() -> str:
+    """Lokalny folder z modelem Parakeet (pusty = pobranie z internetu przy pierwszym uruchomieniu)."""
+    return str(load_user_settings().get("parakeet_model_path", "")).strip()
+
+
+def get_default_model_id() -> str:
+    """Identyfikator pozycji na liście modeli wybranej domyślnie w interfejsie."""
+    if get_asr_engine() == "parakeet":
+        return PARAKEET_MODEL_ID
+    st = load_user_settings()
+    mid = str(st.get("default_whisper_model", DEFAULT_WHISPER_MODEL))
+    return mid if mid in WHISPER_MODELS else DEFAULT_WHISPER_MODEL
 
 
 def get_device_name() -> str:
@@ -606,52 +654,24 @@ def get_recommended_profile() -> dict:
     hw = get_hardware_acceleration_info()
     cores = os.cpu_count() or 4
 
-    if hw["is_cuda"]:
+    if not hw["is_cuda"]:
         return {
-            "recommended_model": "large-v3-turbo",
-            "title": "Wykryto kartę NVIDIA (CUDA)",
+            "recommended_model": PARAKEET_MODEL_ID,
+            "title": "Komputer bez karty NVIDIA",
             "message": (
-                f"Wykryto akcelerację GPU: {hw['badge_text']}.\n\n"
-                "Ustawiono rekomendowany model: 'large-v3-turbo' (float16),\n"
-                "który zapewnia najwyższą precyzję transkrypcji języka polskiego przy błyskawicznym czasie działania."
+                f"Wykryto pracę na CPU ({cores} wątków).\n\n"
+                "Ustawiono silnik Parakeet TDT 0.6B v3 (onnxruntime, int8), który liczy tylko tyle, "
+                "ile trwa nagranie, i nie ma stałego okna 30 s jak Whisper."
             )
         }
-    elif hw.get("is_ryzen_ai"):
-        rec_model = "large-v3-turbo"
-        return {
-            "recommended_model": rec_model,
-            "title": "Wykryto architekturę AMD Ryzen AI (Zen 5 + NPU Ready)",
-            "message": (
-                f"Wykryto zaawansowany procesor AMD Ryzen AI: {hw['badge_text']}.\n\n"
-                f"Ustawiono zoptymalizowany model '{rec_model}' z pełnym próbkowaniem wiązkowym "
-                f"(beam_size=5, int8, {hw['cpu_threads']} wątków roboczych Zen 5).\n\n"
-                "Zapewnia to najwyższą precyzję języka polskiego i stabilną pracę bez zatorów w kolejce."
-            )
-        }
-    else:
-        # Maszyna CPU standardowa
-        if cores >= 4:
-            rec_model = "large-v3-turbo"
-            return {
-                "recommended_model": rec_model,
-                "title": "Wykryto wielordzeniowy procesor CPU",
-                "message": (
-                    f"Wykryto procesor CPU z {cores} wątkami/rdzeniami.\n\n"
-                    f"Ustawiono zoptymalizowany model: '{rec_model}' w trybie int8 ({hw['cpu_threads']} wątki robocze).\n\n"
-                    "Zapewnia on najwyższą precyzję języka polskiego i poprawność trudnych zwrotów."
-                )
-            }
-        else:
-            rec_model = "small"
-            return {
-                "recommended_model": rec_model,
-                "title": "Wykryto procesor CPU",
-                "message": (
-                    f"Wykryto procesor CPU z {cores} wątkami.\n\n"
-                    f"Ustawiono lekki model: '{rec_model}' (int8) dla zachowania optymalnej płynności."
-                )
-            }
 
-
-
-
+    # Karta NVIDIA (CUDA): Whisper large-v3-turbo na GPU
+    return {
+        "recommended_model": "large-v3-turbo",
+        "title": "Wykryto kartę NVIDIA (CUDA)",
+        "message": (
+            f"Wykryto akcelerację GPU: {hw['badge_text']}.\n\n"
+            "Ustawiono rekomendowany model: 'large-v3-turbo' (float16),\n"
+            "który zapewnia najwyższą precyzję transkrypcji języka polskiego przy błyskawicznym czasie działania."
+        )
+    }

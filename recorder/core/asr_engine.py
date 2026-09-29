@@ -65,14 +65,22 @@ def normalize_engine_id(engine_id: Optional[str]) -> str:
 
 
 def create_asr_engine(engine_id: Optional[str] = None, model_size: Optional[str] = None) -> AsrEngine:
-    """Fabryka silników. Importy są leniwe, aby nie ładować ciężkich bibliotek bez potrzeby."""
+    """
+    Fabryka silników. model_size to identyfikator pozycji z listy modeli w interfejsie:
+    'parakeet' wybiera Parakeet, każda inna wartość to rozmiar modelu Whisper.
+    Bez argumentów decyduje ustawienie asr_engine (domyślnie Parakeet bez CUDA).
+    Importy są leniwe, aby nie ładować ciężkich bibliotek bez potrzeby.
+    """
+    if model_size == ENGINE_PARAKEET:
+        engine_id, model_size = ENGINE_PARAKEET, None
     if engine_id is None:
         from recorder.config import get_asr_engine
         engine_id = get_asr_engine()
     engine_id = normalize_engine_id(engine_id)
     if engine_id == ENGINE_PARAKEET:
+        from recorder.config import get_onnx_threads, get_parakeet_model_path
         from recorder.core.parakeet_engine import ParakeetEngine
-        return ParakeetEngine()
+        return ParakeetEngine(threads=get_onnx_threads(), model_path=get_parakeet_model_path())
     from recorder.core.transcriber import WhisperEngine
     if model_size:
         return WhisperEngine(model_size=model_size)
