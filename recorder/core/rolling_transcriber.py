@@ -8,21 +8,18 @@ from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from PySide6.QtCore import QThread, Signal as pyqtSignal
 
-from recorder.core.transcriber import TranscriberEngine, is_hallucination, clean_repeated_text, filter_repeated_words_list
+from recorder.core.transcriber import TranscriberEngine
 from recorder.core.diarizer import format_transcript_without_diarization
 from recorder.core.speakers import format_turns, suggest_speaker_names
 from recorder.config import (
     DEFAULT_WHISPER_MODEL,
     DEFAULT_BEAM_SIZE,
     DEFAULT_INITIAL_PROMPT,
-    get_full_initial_prompt,
     get_beam_size,
     is_adaptive_beam_size,
     get_theme,
     get_speaker_colors,
 )
-
-from recorder.audio.converter import highpass_filter_audio, normalize_audio
 
 
 class RollingBlock:
@@ -162,8 +159,8 @@ class RollingTranscriptionWorker(QThread):
     def run(self):
         self._is_running = True
         try:
-            self.status_signal.emit(f"Inicjalizacja silnika Whisper ({self.model_size})...")
-            self.transcriber.load_model()
+            self.status_signal.emit(f"Inicjalizacja silnika {self.transcriber.display_name}...")
+            self.transcriber.load_model(status_cb=self.status_signal.emit)
             self.status_signal.emit("Silnik transkrypcji w tle: GOTOWY")
 
             while self._is_running or not self.block_queue.empty():
@@ -231,11 +228,6 @@ class RollingTranscriptionWorker(QThread):
             )
             return
 
-        # Oczyszczenie pasma i normalizacja głośności bloku
-        audio_clean = highpass_filter_audio(audio_float, sr=16000, cutoff_hz=80.0)
-        audio_norm = normalize_audio(audio_clean, target_peak=0.92)
-
-        initial_prompt = get_full_initial_prompt()
         base_beam = get_beam_size()
         allow_adaptive = is_adaptive_beam_size()
         q_len = self.block_queue.qsize()
@@ -255,71 +247,16 @@ class RollingTranscriptionWorker(QThread):
         transcript_words = []
 
         try:
-            # Transkrypcja bloku z word-level timestamps i beam search
-            segments, _ = self.transcriber._model.transcribe(
-                audio_norm,
-                word_timestamps=True,
-                language="pl",
-                beam_size=effective_beam,
-                temperature=0.0,
-                condition_on_previous_text=False,
-                no_speech_threshold=0.6,
-                compression_ratio_threshold=2.4,
-                vad_filter=True,
-                vad_parameters=dict(
-                    threshold=0.35,
-                    min_speech_duration_ms=200,
-                    min_silence_duration_ms=400,
-                    speech_pad_ms=400
-                ),
-                initial_prompt=initial_prompt
-            )
-
-            for segment in segments:
-                raw_text = segment.text.strip() if segment.text else ""
-                seg_text = clean_repeated_text(raw_text)
-
-                if not seg_text or is_hallucination(raw_text, seg_text):
-                    continue
-
-                # Jeśli segment ma dokładne słowa
-                if segment.words:
-                    valid_words = [
-                        w for w in segment.words
-                        if w.word and w.start is not None and w.end is not None
-                    ]
-                    filtered_valid = filter_repeated_words_list(valid_words, max_consecutive=2)
-                    for w in filtered_valid:
-                        w_text = w.word if hasattr(w, "word") else w.get("word", "")
-                        w_start = float(w.start if hasattr(w, "start") else w.get("start", 0.0))
-                        w_end = float(w.end if hasattr(w, "end") else w.get("end", 0.0))
-                        prob = float(getattr(w, "probability", 1.0)) if hasattr(w, "probability") else float(w.get("probability", 1.0))
-
-                        # Globalne timestampy: start_sec całego bloku + lokalny start słowa
-                        g_start = round(block.start_sec + w_start, 2)
-                        g_end = round(block.start_sec + w_end, 2)
-                        transcript_words.append({
-                            "word": w_text,
-                            "start": g_start,
-                            "end": g_end,
-                            "probability": prob,
-                            "channel": block.channel_source
-                        })
-                else:
-                    # Fallback estymacji słów
-                    words = seg_text.split()
-                    if words:
-                        w_dur = (segment.end - segment.start) / max(1, len(words))
-                        for i, w_str in enumerate(words):
-                            w_start = round(block.start_sec + segment.start + (i * w_dur), 2)
-                            w_end = round(w_start + w_dur, 2)
-                            transcript_words.append({
-                                "word": (" " + w_str if i > 0 else w_str),
-                                "start": w_start,
-                                "end": w_end,
-                                "probability": 0.9,
-                                "channel": block.channel_source
-                            })
+            # Transkrypcja bloku przez wspólny interfejs silnika (słowa w czasie lokalnym bloku)
+            for w in self.transcriber.transcribe_block(audio_float, beam_size=effective_beam):
+                transcript_words.append({
+                    "word": w["word"],
+                    # Globalne timestampy: start_sec całego bloku + lokalny czas słowa
+                    "start": round(block.start_sec + float(w["start"]), 2),
+                    "end": round(block.start_sec + float(w["end"]), 2),
+                    "probability": float(w.get("probability", 1.0)),
+                    "channel": block.channel_source
+                })
         except Exception as trans_err:
             print(f"[ROLLING] Pominięto fragment bloku #{block.block_index}: {trans_err}")
 

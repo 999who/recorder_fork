@@ -13,6 +13,7 @@ from recorder.config import (
     get_beam_size
 )
 from recorder.audio.converter import preprocess_speech_audio, highpass_filter_audio, normalize_audio
+from recorder.core.asr_engine import AsrEngine, ENGINE_WHISPER, StatusCallback, Word
 
 
 def apply_av_patches():
@@ -229,11 +230,13 @@ def is_hallucination(raw_text: str, cleaned_text: Optional[str] = None) -> bool:
     return False
 
 
-class TranscriberEngine:
+class WhisperEngine(AsrEngine):
     """
     Silnik transkrypcji mowy oparty na faster-whisper z bezpiecznym wczytywaniem audio przez soundfile
     oraz wsparciem dla akceleracji CPU (int8) i CUDA (float16).
     """
+    engine_id = ENGINE_WHISPER
+
     def __init__(
         self,
         model_size: str = DEFAULT_WHISPER_MODEL,
@@ -248,12 +251,22 @@ class TranscriberEngine:
         self.cpu_threads = cpu_threads or hw_info.get("cpu_threads", 4)
         self._model = None
 
-    def load_model(self):
+    @property
+    def is_loaded(self) -> bool:
+        return self._model is not None
+
+    @property
+    def display_name(self) -> str:
+        return f"Whisper ({self.model_size})"
+
+    def load_model(self, status_cb: Optional[StatusCallback] = None):
         """
         Ładuje model Whisper do pamięci z optymalnym typem obliczeń (CUDA float16 lub CPU int8).
         """
         if self._model is not None:
             return self._model
+        if status_cb:
+            status_cb(f"Ładowanie modelu Whisper ({self.model_size})...")
 
         apply_av_patches()
 
@@ -272,6 +285,72 @@ class TranscriberEngine:
         print(f"[WHISPER] Model '{self.model_size}' zostal pomyslnie zaladowany do pamieci!")
         return self._model
 
+
+    def transcribe_block(self, audio_float: np.ndarray, beam_size: Optional[int] = None) -> List[Word]:
+        """
+        Transkrybuje blok mowy z word-level timestamps i beam search.
+        Zwraca słowa z czasem lokalnym bloku (sekundy od jego początku).
+        """
+        if self._model is None:
+            self.load_model()
+
+        # Oczyszczenie pasma i normalizacja głośności bloku
+        audio_clean = highpass_filter_audio(audio_float, sr=16000, cutoff_hz=80.0)
+        audio_norm = normalize_audio(audio_clean, target_peak=0.92)
+        effective_beam = beam_size if beam_size is not None else get_beam_size()
+
+        segments, _ = self._model.transcribe(
+            audio_norm,
+            word_timestamps=True,
+            language="pl",
+            beam_size=effective_beam,
+            temperature=0.0,
+            condition_on_previous_text=False,
+            no_speech_threshold=0.6,
+            compression_ratio_threshold=2.4,
+            vad_filter=True,
+            vad_parameters=dict(
+                threshold=0.35,
+                min_speech_duration_ms=200,
+                min_silence_duration_ms=400,
+                speech_pad_ms=400
+            ),
+            initial_prompt=get_full_initial_prompt()
+        )
+
+        words: List[Word] = []
+        for segment in segments:
+            raw_text = segment.text.strip() if segment.text else ""
+            seg_text = clean_repeated_text(raw_text)
+            if not seg_text or is_hallucination(raw_text, seg_text):
+                continue
+
+            if segment.words:
+                valid_words = [
+                    w for w in segment.words
+                    if w.word and w.start is not None and w.end is not None
+                ]
+                for w in filter_repeated_words_list(valid_words, max_consecutive=2):
+                    words.append({
+                        "word": w.word if hasattr(w, "word") else w.get("word", ""),
+                        "start": float(w.start if hasattr(w, "start") else w.get("start", 0.0)),
+                        "end": float(w.end if hasattr(w, "end") else w.get("end", 0.0)),
+                        "probability": float(getattr(w, "probability", 1.0)) if hasattr(w, "probability") else float(w.get("probability", 1.0)),
+                    })
+            else:
+                # Fallback: równomierne rozłożenie słów w segmencie
+                seg_words = seg_text.split()
+                if seg_words:
+                    w_dur = (segment.end - segment.start) / max(1, len(seg_words))
+                    for i, w_str in enumerate(seg_words):
+                        w_start = float(segment.start) + i * w_dur
+                        words.append({
+                            "word": (" " + w_str if i > 0 else w_str),
+                            "start": w_start,
+                            "end": w_start + w_dur,
+                            "probability": 0.9,
+                        })
+        return words
 
     def transcribe_live_chunk(self, audio_float: np.ndarray, language: str = "pl", context_prompt: str = "", beam_size: Optional[int] = None) -> str:
         """
@@ -435,3 +514,7 @@ class TranscriberEngine:
         print(f"[WHISPER] Transkrypcja zakończona! Rozpoznano łącznie {len(transcript_words)} słów.")
         return transcript_words
 
+
+
+# Alias wsteczny: dotychczasowa nazwa klasy używana w workerach i testach
+TranscriberEngine = WhisperEngine

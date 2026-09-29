@@ -277,12 +277,13 @@ def test_adaptive_beam_size_under_load():
     # Zamockowanie silnika Whisper, aby nie ładować ciężkich wag w teście jednostkowym
     captured_beam_sizes = []
 
-    def mock_transcribe(audio_norm, **kwargs):
-        captured_beam_sizes.append(kwargs.get("beam_size"))
-        return [], None
+    def mock_transcribe_block(audio_float, beam_size=None):
+        captured_beam_sizes.append(beam_size)
+        return []
 
+    # Zamockowany silnik przez wspólny interfejs AsrEngine
     worker.transcriber = MagicMock()
-    worker.transcriber._model.transcribe = mock_transcribe
+    worker.transcriber.transcribe_block = mock_transcribe_block
 
     from unittest.mock import patch
     with patch("recorder.core.rolling_transcriber.is_adaptive_beam_size", return_value=True), \
