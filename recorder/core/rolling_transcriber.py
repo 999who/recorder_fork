@@ -10,7 +10,7 @@ from PySide6.QtCore import QThread, Signal as pyqtSignal
 
 from recorder.core.asr_engine import create_asr_engine
 from recorder.core.transcriber import filter_repeated_words_list
-from recorder.core.diarizer import format_transcript_without_diarization
+from recorder.core.session import format_words_to_turns
 from recorder.core.speakers import format_turns, suggest_speaker_names
 from recorder.config import (
     get_default_model_id,
@@ -270,7 +270,7 @@ class RollingTranscriptionWorker(QThread):
         # Formatowanie słów tego bloku do turnów
         block.words = transcript_words
         if transcript_words:
-            _, _, block_turns = format_transcript_without_diarization(transcript_words)
+            _, _, block_turns = format_words_to_turns(transcript_words)
             default_spk = "Mikrofon" if block.channel_source == "mic" else "Dźwięk Systemu"
             from datetime import timedelta
             b_wall_st = getattr(block, "wall_start_time", None)

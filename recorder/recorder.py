@@ -2,7 +2,7 @@
 Wrapper kompatybilności wstecznej dla projektu recorder67.
 Projekt został podzielony na moduły:
 - recorder/config.py
-- recorder/core/ (vad.py, transcriber.py, diarizer.py)
+- recorder/core/ (vad.py, transcriber.py, parakeet_engine.py)
 - recorder/audio/ (devices.py, converter.py, capture.py)
 - recorder/ui/ (window.py, workers.py, theme.py)
 """

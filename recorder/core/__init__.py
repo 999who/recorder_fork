@@ -1,20 +1,15 @@
 """
-Moduł Core AI - Czyste przetwarzanie modeli VAD, Faster-Whisper oraz PyAnnote bez zależności od GUI.
+Moduł Core AI - Czyste przetwarzanie modeli VAD oraz silników rozpoznawania mowy (Parakeet, Whisper) bez zależności od GUI.
 """
 
 from .vad import SileroVADDetector, is_silero_available
 from .transcriber import TranscriberEngine
+from .asr_engine import AsrEngine, create_asr_engine
 
 __all__ = [
     "SileroVADDetector",
     "is_silero_available",
     "TranscriberEngine",
-    "DiarizationEngine",
+    "AsrEngine",
+    "create_asr_engine",
 ]
-
-
-def __getattr__(name):
-    if name == "DiarizationEngine":
-        from .diarizer import DiarizationEngine
-        return DiarizationEngine
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

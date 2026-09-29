@@ -45,54 +45,6 @@ class RecordSourceMode:
     HYBRID_DUAL = "hybrid_dual"    # 🎙️+🎧 Tryb Hybrydowy (Mikrofon + System / 2 ścieżki)
 
 
-def get_hf_token() -> str:
-    """
-    Pobiera token HuggingFace ze słownika ustawień użytkownika, pliku .env lub zmiennych środowiskowych.
-    """
-    # 1. Sprawdzenie ustawień użytkownika
-    try:
-        token = load_user_settings().get("hf_token", "").strip()
-        if token:
-            return token
-    except Exception:
-        pass
-
-    # 2. Sprawdzenie zmiennej środowiskowej
-    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    if token:
-        return token.strip()
-
-    # 2. Sprawdzenie pliku .env w bieżącym katalogu lub w katalogu głównym projektu
-    env_paths = [
-        os.path.join(os.getcwd(), ".env"),
-        os.path.join(os.path.dirname(sys.executable), ".env"),
-        getattr(sys, "_MEIPASS", "") and os.path.join(getattr(sys, "_MEIPASS"), ".env"),
-        os.path.join(BASE_DIR, ".env"),
-        os.path.join(os.path.dirname(__file__), ".env"),
-    ]
-
-    for env_path in env_paths:
-        if os.path.exists(env_path):
-            try:
-                with open(env_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line or line.startswith("#"):
-                            continue
-                        if line.startswith("HF_TOKEN="):
-                            val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                            if val:
-                                return val
-                        elif line.startswith("HUGGING_FACE_HUB_TOKEN="):
-                            val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                            if val:
-                                return val
-            except Exception:
-                pass
-
-    return ""
-
-
 # Dostępne modele Faster-Whisper z opisem dla UI
 WHISPER_MODELS = {
     "small": {
@@ -261,7 +213,6 @@ def load_user_settings(force_reload: bool = False) -> dict:
         "custom_keywords": get_env_variable("CUSTOM_KEYWORDS", "emanager.pro, EMANAGER.PRO, CRM, AI, Supabase, n8n, Make, webhook, API, LLM, GPT-4, Claude, Gemini, Gemini Vision, Helpdesk, Subiekt GT, Subiekt, faktura proforma, synchronizacja, harmonogram, rejestr zmian, zgłoszenia, zamówienia, matryca uprawnień, QR code"),
         "whisper_beam_size": int(get_env_variable("WHISPER_BEAM_SIZE", "5")),
         "default_whisper_model": get_env_variable("DEFAULT_WHISPER_MODEL", "large-v3-turbo"),
-        "hf_token": get_env_variable("HF_TOKEN", ""),
         "device_name": get_env_variable("DEVICE_NAME", "Biuro-Stanowisko-1"),
         "organization_id": get_env_variable("ORGANIZATION_ID", "default_org"),
         "sync_target": get_env_variable("SYNC_TARGET", "emanager"),
@@ -673,31 +624,6 @@ def get_hardware_acceleration_info() -> dict:
             "badge_text": f"💻 Akceleracja: CPU ({safe_threads} wątków, int8 AVX)",
             "summary": f"CPU (int8 - {safe_threads} thr)"
         }
-
-
-# Opcje wyboru liczby osób dla PyAnnote (Limity Max vs Dokładna liczba)
-SPEAKER_COUNT_OPTIONS = [
-    ("Auto (Bez limitu / Dowolna liczba osób)", {}),
-    ("Rozmowa 2-3 osoby (Zalecane dla małych narad)", {"min_speakers": 2, "max_speakers": 3}),
-    ("Rozmowa 2-4 osoby", {"min_speakers": 2, "max_speakers": 4}),
-    ("Spotkanie zespołowe 4-7 osób", {"min_speakers": 4, "max_speakers": 7}),
-    ("Duże spotkanie biurowe 6-10 osób", {"min_speakers": 6, "max_speakers": 10}),
-    ("Maksymalnie 2 osoby (Dialog)", {"max_speakers": 2}),
-    ("Maksymalnie 3 osoby", {"max_speakers": 3}),
-    ("Maksymalnie 4 osoby", {"max_speakers": 4}),
-    ("Maksymalnie 5 osób", {"max_speakers": 5}),
-    ("Maksymalnie 8 osób", {"max_speakers": 8}),
-    ("Maksymalnie 10 osób", {"max_speakers": 10}),
-    ("Dokładnie 1 osoba (Monolog)", {"num_speakers": 1}),
-    ("Dokładnie 2 osoby", {"num_speakers": 2}),
-    ("Dokładnie 3 osoby", {"num_speakers": 3}),
-    ("Dokładnie 4 osoby", {"num_speakers": 4}),
-    ("Dokładnie 5 osób", {"num_speakers": 5}),
-    ("Dokładnie 6 osób", {"num_speakers": 6}),
-    ("Dokładnie 8 osób", {"num_speakers": 8}),
-    ("Dokładnie 10 osób", {"num_speakers": 10}),
-]
-
 
 
 def get_recommended_profile() -> dict:

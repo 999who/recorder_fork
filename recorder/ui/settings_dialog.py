@@ -77,7 +77,7 @@ class SettingsDialog(QDialog):
         "emanager.pro, EMANAGER.PRO, CRM, AI, Supabase, n8n, Make, webhook, API, LLM, GPT-4, Claude, Gemini, "
         "Gemini Vision, Lovable, React, Helpdesk, Subiekt GT, Subiekt, faktura proforma, zamówienia, zgłoszenia, "
         "harmonogram, kategorie, dyplomy, matryca uprawnień, recepcja, check-in, QR code, CSV, oświetleniowiec, "
-        "synchronizacja, rejestr zmian, diaryzacja, transkrypcja, procesy biznesowe, architektura wzrostu"
+        "synchronizacja, rejestr zmian, transkrypcja, procesy biznesowe, architektura wzrostu"
     )
 
     PRESET_KEYWORDS_SALES = (
@@ -150,7 +150,7 @@ class SettingsDialog(QDialog):
         main_layout.addLayout(btn_bar)
 
     def _create_tab_dictionary(self):
-        """Karta 1: Słownik branżowy, Beam Size Whispera, Token HuggingFace."""
+        """Karta 1: Słownik branżowy, silnik rozpoznawania mowy, Beam Size Whispera."""
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setSpacing(12)
@@ -296,26 +296,6 @@ class SettingsDialog(QDialog):
         )
         whisper_layout.addWidget(self.chk_adaptive_beam)
         layout.addWidget(box_whisper)
-
-        # Sekcja: Token HuggingFace
-        box_hf = QGroupBox("🔑 Dostęp do Rozpoznawania Osób (PyAnnote HuggingFace)")
-        hf_layout = QVBoxLayout(box_hf)
-
-        hf_input_row = QHBoxLayout()
-        self.txt_hf_token = QLineEdit()
-        self.txt_hf_token.setEchoMode(QLineEdit.EchoMode.Password)
-        self.txt_hf_token.setPlaceholderText("hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-        hf_input_row.addWidget(self.txt_hf_token, stretch=1)
-
-        self.btn_toggle_hf = QPushButton("👁️ Pokaż")
-        self.btn_toggle_hf.clicked.connect(self._toggle_hf_visibility)
-        hf_input_row.addWidget(self.btn_toggle_hf)
-        hf_layout.addLayout(hf_input_row)
-
-        lbl_hf_info = QLabel("Token wymagany do pobrania modeli diaryzacji mowy (pyannote/speaker-diarization-3.1).")
-        lbl_hf_info.setObjectName("LblSettingDesc")
-        hf_layout.addWidget(lbl_hf_info)
-        layout.addWidget(box_hf)
 
         layout.addStretch()
         self.tabs.addTab(tab, "📚 Słownik i AI")
@@ -519,14 +499,6 @@ class SettingsDialog(QDialog):
         folder = QFileDialog.getExistingDirectory(self, "Wybierz folder z modelem Parakeet", self.txt_parakeet_path.text())
         if folder:
             self.txt_parakeet_path.setText(folder)
-
-    def _toggle_hf_visibility(self):
-        if self.txt_hf_token.echoMode() == QLineEdit.EchoMode.Password:
-            self.txt_hf_token.setEchoMode(QLineEdit.EchoMode.Normal)
-            self.btn_toggle_hf.setText("🙈 Ukryj")
-        else:
-            self.txt_hf_token.setEchoMode(QLineEdit.EchoMode.Password)
-            self.btn_toggle_hf.setText("👁️ Pokaż")
 
     def _on_vad_slider_changed(self, val: int):
         f_val = val / 100.0
@@ -975,7 +947,6 @@ class SettingsDialog(QDialog):
         idx = self.combo_beam.findData(beam_val)
         if idx != -1:
             self.combo_beam.setCurrentIndex(idx)
-        self.txt_hf_token.setText(st.get("hf_token", ""))
         self.chk_adaptive_beam.setChecked(bool(st.get("adaptive_beam_size", False)))
         e_idx = self.combo_engine.findData(str(st.get("asr_engine", "")).strip().lower())
         self.combo_engine.setCurrentIndex(e_idx if e_idx != -1 else 0)
@@ -1131,7 +1102,6 @@ class SettingsDialog(QDialog):
             "parakeet_model_path": self.txt_parakeet_path.text().strip(),
             "custom_replacements": self._collect_replacements(),
             "replacements_for_whisper": self.chk_repl_whisper.isChecked(),
-            "hf_token": self.txt_hf_token.text().strip(),
             "record_source_mode": self.combo_default_source_mode.currentData() or RecordSourceMode.HYBRID_DUAL,
             "vad_speech_threshold": round(self.slider_vad.value() / 100.0, 2),
             "system_vad_speech_threshold": round(self.slider_vad_sys.value() / 100.0, 2),

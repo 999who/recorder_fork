@@ -35,7 +35,7 @@ from recorder.audio.devices import HAS_PYAUDIOWPATCH, TargetAppAudioMonitor, cle
 from recorder.core.vad import SileroVADDetector, is_silero_available
 from recorder.core.blocks import should_cut_block
 from recorder.core.asr_engine import create_asr_engine
-from recorder.core.diarizer import DiarizationEngine, format_transcript_without_diarization
+from recorder.core.session import format_words_to_turns
 
 try:
     import pyaudiowpatch as pyaudio
@@ -1337,38 +1337,24 @@ class LiveTranscriptionWorker(QThread):
 
 class TranscriptionWorker(QThread):
     """
-    Wątek wykonujący pełną transkrypcję z opcjonalną diaryzacją mówców (PyAnnote).
+    Wątek wykonujący pełną transkrypcję pliku audio wybranym silnikiem (Parakeet / Whisper).
     """
     progress_signal = pyqtSignal(int, str)
-    preliminary_signal = pyqtSignal(str, str, list)  # Wstępna transkrypcja z Whispera przed diaryzacją
+    preliminary_signal = pyqtSignal(str, str, list)  # Wstępna transkrypcja przed finalizacją
     finished_signal = pyqtSignal(str, str, list)     # (html_text, plain_text, turns)
     error_signal = pyqtSignal(str)
 
-    def __init__(
-        self,
-        audio_path: str,
-        hf_token: str,
-        model_size: Optional[str] = None,
-        enable_diarization: bool = True,
-        num_speakers: Optional[int] = None,
-        min_speakers: Optional[int] = None,
-        max_speakers: Optional[int] = None
-    ):
+    def __init__(self, audio_path: str, model_size: Optional[str] = None):
         super().__init__()
         self.audio_path = audio_path
-        self.hf_token = hf_token
         self.model_size = model_size
-        self.enable_diarization = enable_diarization
-        self.num_speakers = num_speakers
-        self.min_speakers = min_speakers
-        self.max_speakers = max_speakers
 
     def run(self):
         try:
             transcriber = create_asr_engine(model_size=self.model_size)
             self.progress_signal.emit(10, f"Ładowanie silnika {transcriber.display_name}...")
             transcriber.load_model(status_cb=lambda msg: self.progress_signal.emit(10, msg))
-            
+
             self.progress_signal.emit(30, "Trwa transkrypcja audio...")
             transcript_words = transcriber.transcribe_file_with_words(self.audio_path, language="pl")
 
@@ -1376,42 +1362,10 @@ class TranscriptionWorker(QThread):
                 self.finished_signal.emit("Brak wykrytej mowy w nagraniu.", "Brak wykrytej mowy w nagraniu.", [])
                 return
 
-            # Wstępne sformatowanie transkrypcji (gwarancja braku utraty danych)
-            init_html, init_plain, init_turns = format_transcript_without_diarization(transcript_words)
+            init_html, init_plain, init_turns = format_words_to_turns(transcript_words)
             self.preliminary_signal.emit(init_html, init_plain, init_turns)
-
-            # Jeśli wyłączono diaryzację lub brak tokena HuggingFace
-            if not self.enable_diarization or not self.hf_token:
-                self.progress_signal.emit(100, "Gotowe!")
-                self.finished_signal.emit(init_html, init_plain, init_turns)
-                return
-
-            # Pełna diaryzacja mówców (PyAnnote)
-            speaker_info = ""
-            if self.num_speakers:
-                speaker_info = f" (dokładnie {self.num_speakers} os.)"
-            elif self.max_speakers:
-                speaker_info = f" (max {self.max_speakers} os.)"
-
-            self.progress_signal.emit(60, f"Ładowanie modelu PyAnnote{speaker_info}...")
-            diarizer = DiarizationEngine(hf_token=self.hf_token)
-
-            def on_diar_progress(pct: int, msg: str):
-                self.progress_signal.emit(pct, msg)
-
-            self.progress_signal.emit(65, f"Analiza głosów mówców{speaker_info}...")
-            final_html, final_plain, turns = diarizer.process(
-                self.audio_path,
-                transcript_words,
-                batch_size=32,
-                num_speakers=self.num_speakers,
-                min_speakers=self.min_speakers,
-                max_speakers=self.max_speakers,
-                progress_callback=on_diar_progress
-            )
-
             self.progress_signal.emit(100, "Gotowe!")
-            self.finished_signal.emit(final_html, final_plain, turns)
+            self.finished_signal.emit(init_html, init_plain, init_turns)
 
         except Exception as e:
             self.error_signal.emit(str(e))
@@ -1421,8 +1375,8 @@ class FileProcessingWorker(QThread):
     """
     Wątek asynchroniczny przetwarzający wgrany z dysku plik audio lub wideo (np. .mp4 ze spotkania):
     1. Normalizacja do formatu WAV 16kHz mono (za pomocą wbudowanego imageio-ffmpeg)
-    2. Transkrypcja Faster-Whisper z wybranym modelem i wskaźnikiem postępu w locie + natychmiastowy autozapis TXT
-    3. Opcjonalna diaryzacja mówców PyAnnote (batch_size=32, hook postępu w UI, automatyczna aktualizacja TXT)
+    2. Transkrypcja wybranym silnikiem (Parakeet / Whisper) ze wskaźnikiem postępu w locie
+       + natychmiastowy autozapis TXT
     """
     progress_signal = pyqtSignal(int, str)
     preliminary_signal = pyqtSignal(str, str, str, list)  # (html_text, plain_text, prepared_wav_path, turns)
@@ -1433,22 +1387,12 @@ class FileProcessingWorker(QThread):
         self,
         input_file_path: str,
         recordings_dir: str,
-        hf_token: Optional[str] = None,
-        model_size: Optional[str] = None,
-        enable_diarization: bool = True,
-        num_speakers: Optional[int] = None,
-        min_speakers: Optional[int] = None,
-        max_speakers: Optional[int] = None
+        model_size: Optional[str] = None
     ):
         super().__init__()
         self.input_file_path = input_file_path
         self.recordings_dir = recordings_dir
-        self.hf_token = hf_token
         self.model_size = model_size
-        self.enable_diarization = enable_diarization
-        self.num_speakers = num_speakers
-        self.min_speakers = min_speakers
-        self.max_speakers = max_speakers
 
     def run(self):
         try:
@@ -1457,14 +1401,14 @@ class FileProcessingWorker(QThread):
             print("="*70)
 
             # ETAP 1: Konwersja i normalizacja formatu audio
-            self.progress_signal.emit(5, "Etap 1/3: Ekstrakcja i normalizacja dźwięku do 16kHz WAV...")
+            self.progress_signal.emit(5, "Etap 1/2: Ekstrakcja i normalizacja dźwięku do 16kHz WAV...")
             prepared_wav_path, duration_sec = prepare_audio_file(self.input_file_path, self.recordings_dir)
 
             mins = int(duration_sec // 60)
             secs = int(duration_sec % 60)
             print(f"🎵 [PLIK] Audio przygotowane: {prepared_wav_path} (Długość: {mins}m {secs}s)")
             transcriber = create_asr_engine(model_size=self.model_size)
-            self.progress_signal.emit(15, f"Etap 1/3: Audio gotowe ({mins}m {secs}s). Ładowanie silnika {transcriber.display_name}...")
+            self.progress_signal.emit(15, f"Etap 1/2: Audio gotowe ({mins}m {secs}s). Ładowanie silnika {transcriber.display_name}...")
 
             # ETAP 2: Transkrypcja wybranym silnikiem z raportowaniem postępu
             transcriber.load_model(status_cb=lambda msg: self.progress_signal.emit(15, msg))
@@ -1475,10 +1419,10 @@ class FileProcessingWorker(QThread):
                 cur_secs = int(cur_time_sec % 60)
                 self.progress_signal.emit(
                     pct,
-                    f"Etap 2/3: Transkrypcja ({cur_mins}m {cur_secs}s / {mins}m {secs}s - {int(ratio * 100)}%)..."
+                    f"Etap 2/2: Transkrypcja ({cur_mins}m {cur_secs}s / {mins}m {secs}s - {int(ratio * 100)}%)..."
                 )
 
-            self.progress_signal.emit(20, "Etap 2/3: Rozpoczynanie transkrypcji mowy...")
+            self.progress_signal.emit(20, "Etap 2/2: Rozpoczynanie transkrypcji mowy...")
             transcript_words = transcriber.transcribe_file_with_words(
                 prepared_wav_path,
                 language="pl",
@@ -1493,7 +1437,7 @@ class FileProcessingWorker(QThread):
                 return
 
             # Wczesne sformatowanie i NATYCHMIASTOWY zapis wstępnego pliku TXT na dysk
-            init_html, init_plain, init_turns = format_transcript_without_diarization(transcript_words)
+            init_html, init_plain, init_turns = format_words_to_turns(transcript_words)
             
             base_name = os.path.basename(prepared_wav_path)
             file_stem = os.path.splitext(base_name)[0]
@@ -1511,150 +1455,13 @@ class FileProcessingWorker(QThread):
             # Wyemitowanie wstępnego tekstu do GUI (użytkownik już ma podgląd pełnego tekstu!)
             self.preliminary_signal.emit(init_html, init_plain, prepared_wav_path, init_turns)
 
-            # ETAP 3: Diaryzacja PyAnnote lub zakończenie
-            turns = []
-            if self.enable_diarization and self.hf_token and self.hf_token.strip():
-                speaker_info = ""
-                if self.num_speakers:
-                    speaker_info = f" (dokładnie {self.num_speakers} os.)"
-                elif self.max_speakers:
-                    speaker_info = f" (max {self.max_speakers} os.)"
-
-                self.progress_signal.emit(60, f"Etap 3/3: Ładowanie modelu PyAnnote{speaker_info}...")
-                diarizer = DiarizationEngine(hf_token=self.hf_token.strip())
-
-                def on_diar_progress(pct: int, msg: str):
-                    self.progress_signal.emit(pct, msg)
-
-                self.progress_signal.emit(65, f"Etap 3/3: Rozpoznawanie osób i łączenie z tekstem{speaker_info}...")
-                final_html, final_plain, turns = diarizer.process(
-                    prepared_wav_path,
-                    transcript_words,
-                    batch_size=32,
-                    num_speakers=self.num_speakers,
-                    min_speakers=self.min_speakers,
-                    max_speakers=self.max_speakers,
-                    progress_callback=on_diar_progress
-                )
-
-                # Aktualizacja pliku TXT o przypisanych mówców
-                try:
-                    with open(txt_path, "w", encoding="utf-8") as f:
-                        f.write(final_plain)
-                    print(f"💾 [AUTOZAPIS] Zaktualizowano plik z mówcami: {txt_path}")
-                except Exception as update_err:
-                    print(f"⚠️ [AUTOZAPIS] Błąd aktualizacji TXT: {update_err}")
-
-            else:
-                final_html = init_html
-                final_plain = init_plain
-                turns = init_turns
-
             print("="*70)
             print(f"🎉 [PLIK] Sukces! Przetwarzanie zakończone: {os.path.basename(prepared_wav_path)}")
             print("="*70 + "\n")
 
             self.progress_signal.emit(100, "Przetwarzanie zakończone pomyślnie!")
-            self.finished_signal.emit(final_html, final_plain, prepared_wav_path, turns)
+            self.finished_signal.emit(init_html, init_plain, prepared_wav_path, init_turns)
 
         except Exception as e:
             print(f"❌ [BŁĄD PRZETWARZANIA]: {e}", file=sys.stderr)
             self.error_signal.emit(str(e))
-
-
-class DiarizationOnlyWorker(QThread):
-    """
-    Dedykowany wątek do asynchronicznego uruchamiania diaryzacji PyAnnote na istniejącym pliku audio i sesji JSON.
-    Nie uruchamia Whispera – wykorzystuje gotowe słowa z zapisanego pliku sesji!
-    """
-    progress_signal = pyqtSignal(int, str)
-    finished_signal = pyqtSignal(str, str, list, str)  # (final_html, final_plain, turns, session_path)
-    error_signal = pyqtSignal(str)
-
-    def __init__(
-        self,
-        audio_path: str,
-        transcript_words: List[Dict[str, Any]],
-        hf_token: str,
-        session_json_path: Optional[str] = None,
-        num_speakers: Optional[int] = None,
-        min_speakers: Optional[int] = None,
-        max_speakers: Optional[int] = None
-    ):
-        super().__init__()
-        self.audio_path = audio_path
-        self.transcript_words = transcript_words
-        self.hf_token = hf_token
-        self.session_json_path = session_json_path
-        self.num_speakers = num_speakers
-        self.min_speakers = min_speakers
-        self.max_speakers = max_speakers
-
-    def run(self):
-        try:
-            if not os.path.exists(self.audio_path):
-                self.error_signal.emit("Plik audio dla tej sesji nie istnieje na dysku.")
-                return
-
-            if not self.transcript_words:
-                self.error_signal.emit("Brak słów transkrypcji w sesji. Najpierw wykonaj transkrypcję.")
-                return
-
-            self.progress_signal.emit(5, "Inicjalizacja modułu diaryzacji PyAnnote...")
-            from recorder.core.diarizer import DiarizationEngine
-            from recorder.core.session import TranscriptionSession, get_session_path_for_audio, extract_datetime_from_filename
-            from recorder.config import TRANSCRIPTIONS_DIR
-
-            speaker_info = ""
-            if self.num_speakers:
-                speaker_info = f" (dokładnie {self.num_speakers} os.)"
-            elif self.min_speakers and self.max_speakers:
-                speaker_info = f" ({self.min_speakers}-{self.max_speakers} os.)"
-            elif self.max_speakers:
-                speaker_info = f" (max {self.max_speakers} os.)"
-
-            self.progress_signal.emit(15, f"Ładowanie modelu PyAnnote{speaker_info}...")
-            diarizer = DiarizationEngine(hf_token=self.hf_token.strip())
-
-            def on_diar_progress(pct: int, msg: str):
-                self.progress_signal.emit(pct, msg)
-
-            json_path = self.session_json_path or get_session_path_for_audio(self.audio_path, TRANSCRIPTIONS_DIR)
-            session = TranscriptionSession.load_from_json(json_path) if os.path.exists(json_path) else None
-
-            session_dt = None
-            if session and session.created_at:
-                try:
-                    session_dt = datetime.fromisoformat(session.created_at)
-                except Exception:
-                    pass
-            if not session_dt:
-                session_dt = extract_datetime_from_filename(self.audio_path)
-
-            self.progress_signal.emit(30, f"Rozpoznawanie osób i łączenie z gotowym tekstem{speaker_info}...")
-            final_html, final_plain, turns = diarizer.process(
-                self.audio_path,
-                self.transcript_words,
-                num_speakers=self.num_speakers,
-                min_speakers=self.min_speakers,
-                max_speakers=self.max_speakers,
-                session_start_time=session_dt,
-                progress_callback=on_diar_progress
-            )
-
-            # Aktualizacja pliku sesji JSON
-            if session:
-                session.has_diarization = True
-                session.turns = turns
-                session.speakers_detected = sorted(list(set(t.get("speaker") for t in turns if t.get("speaker"))))
-                session.save_to_json(json_path)
-                final_plain = session.export_to_plain_text(session_start_time=session_dt)
-                final_html = session.export_to_html(session_start_time=session_dt)
-
-            self.progress_signal.emit(100, "Diaryzacja zakończona pomyślnie!")
-            self.finished_signal.emit(final_html, final_plain, turns, json_path or "")
-
-        except Exception as e:
-            print(f"❌ [BŁĄD DIARYZACJI]: {e}", file=sys.stderr)
-            self.error_signal.emit(str(e))
-

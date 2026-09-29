@@ -1402,7 +1402,7 @@ def generate_theme_qss(
     }}
 
     /* =======================================================================
-       SEKCJA DIARYZACJI, LIST I PODGLĄDU
+       SEKCJA LIST I PODGLĄDU
        ======================================================================= */
     QPushButton#BtnUploadAudio {{
         background-color: #3a0ca3;
@@ -1415,43 +1415,9 @@ def generate_theme_qss(
     QPushButton#BtnUploadAudio:hover {{
         background-color: #4361ee;
     }}
-    QLabel#SpeakerCountLabel, QLabel#AudioPathLabel, QLabel#TxtPathLabel {{
+    QLabel#AudioPathLabel, QLabel#TxtPathLabel {{
         color: {t.text_secondary};
         font-size: 11px;
-    }}
-    QPushButton#BtnRunDiarization {{
-        background-color: #7209b7;
-        color: #ffffff;
-        font-weight: bold;
-        border-radius: 4px;
-        padding: 0 10px;
-        font-size: 10px;
-    }}
-    QPushButton#BtnRunDiarization:hover {{
-        background-color: #5a0792;
-    }}
-    QGroupBox#SpeakerBox {{
-        border: 1px solid {t.accent};
-        border-radius: 6px;
-        margin-top: 10px;
-        font-weight: bold;
-    }}
-    QLabel#SpeakerInfoLabel {{
-        color: {t.accent};
-        font-size: 11px;
-    }}
-    QScrollArea#SpeakerScrollArea, QWidget#SpeakerScrollWidget {{
-        background: transparent;
-    }}
-    QPushButton#BtnApplySpeakers {{
-        background-color: #2b9348;
-        color: #ffffff;
-        font-weight: bold;
-        border-radius: 6px;
-        font-size: 11px;
-    }}
-    QPushButton#BtnApplySpeakers:hover {{
-        background-color: #23783a;
     }}
     QPushButton#BtnCopyTranscript {{
         background-color: {t.bg_surface};
@@ -1478,51 +1444,6 @@ def generate_theme_qss(
     QPushButton#BtnSaveTranscript:hover {{
         background-color: {t.bg_hover};
         color: {t.text_primary};
-    }}
-
-    /* =======================================================================
-       MAPOWANIE MÓWCÓW (SPEAKER MAPPING CARDS)
-       ======================================================================= */
-    QFrame#SpeakerCard {{
-        background-color: {t.bg_surface};
-        border: 1px solid {t.border_strong};
-        border-radius: 8px;
-        padding: 6px;
-    }}
-    QLabel#SpeakerIdLabel {{
-        color: {t.text_primary};
-        font-size: 12px;
-        font-weight: bold;
-    }}
-    QLabel#SpeakerStatsLabel {{
-        color: #10b981;
-        font-size: 11px;
-        font-weight: bold;
-    }}
-    QLineEdit#SpeakerNameEdit {{
-        background-color: {t.bg_input};
-        color: {t.text_primary};
-        border: 1px solid {t.accent};
-        border-radius: 4px;
-        padding: 5px 8px;
-        font-weight: bold;
-        font-size: 12px;
-    }}
-    QLineEdit#SpeakerRoleEdit {{
-        background-color: {t.bg_input};
-        color: #f59e0b;
-        border: 1px solid #f59e0b;
-        border-radius: 4px;
-        padding: 5px 8px;
-        font-size: 11px;
-    }}
-    QLabel#SpeakerClueLabel {{
-        color: {t.accent};
-        font-size: 11px;
-    }}
-    QLabel#SpeakerSampleLabel {{
-        color: {t.text_secondary};
-        font-size: 11px;
     }}
 
     /* =======================================================================

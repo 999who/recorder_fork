@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from recorder.core.session import get_turn_sync_id
-from recorder.core.diarizer import format_transcript_without_diarization
+from recorder.core.session import format_words_to_turns
 
 
 def test_get_turn_sync_id_stability():
@@ -46,9 +46,9 @@ def test_get_turn_sync_id_stability():
     assert get_turn_sync_id(turn_without_id) == "system_1.25_4.5_Dźwięk z prezentacji"
 
 
-def test_format_transcript_without_diarization_assigns_unique_uuid():
+def test_format_words_to_turns_assigns_unique_uuid():
     """
-    Weryfikuje, że format_transcript_without_diarization automatycznie nadaje
+    Weryfikuje, że format_words_to_turns automatycznie nadaje
     unikalny identyfikator UUID dla każdej wygenerowanej tury wypowiedzi.
     """
     words = [
@@ -56,7 +56,7 @@ def test_format_transcript_without_diarization_assigns_unique_uuid():
         {"word": "wszystkim.", "start": 0.6, "end": 1.2},
         {"word": "Zaczynamy.", "start": 3.0, "end": 4.0}
     ]
-    _, _, turns = format_transcript_without_diarization(words)
+    _, _, turns = format_words_to_turns(words)
     assert len(turns) >= 2
     for t in turns:
         assert "id" in t

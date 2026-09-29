@@ -3,6 +3,7 @@ import sys
 import json
 import re
 import tempfile
+import uuid
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 
@@ -110,10 +111,9 @@ def get_turn_sync_id(turn: Dict[str, Any]) -> str:
 
 class TranscriptionSession:
     """
-    Struktura danych reprezentująca kompletną sesję transkrypcji i diaryzacji.
+    Struktura danych reprezentująca kompletną sesję transkrypcji.
     Zapisywana jako plik .json na dysku obok pliku .txt i nagrania .wav.
-    Umożliwia niezależne, modułowe uruchamianie diaryzacji PyAnnote bez konieczności
-    ponownego przetwarzania audio przez Whisper.
+    Pole whisper_model przechowuje identyfikator wybranego modelu (np. 'parakeet' lub rozmiar Whispera).
     """
     def __init__(
         self,
@@ -123,7 +123,6 @@ class TranscriptionSession:
         created_at: Optional[str] = None,
         whisper_model: str = "",
         has_transcription: bool = False,
-        has_diarization: bool = False,
         speakers_detected: Optional[List[str]] = None,
         speaker_mapping: Optional[Dict[str, str]] = None,
         words: Optional[List[Dict[str, Any]]] = None,
@@ -139,7 +138,6 @@ class TranscriptionSession:
         self.created_at = created_at or datetime.now().isoformat()
         self.whisper_model = whisper_model
         self.has_transcription = has_transcription
-        self.has_diarization = has_diarization
         self.speakers_detected = speakers_detected or []
         self.speaker_mapping = speaker_mapping or {}
         self.words = sorted(words or [], key=lambda w: float(w.get("start", 0.0)))
@@ -176,7 +174,6 @@ class TranscriptionSession:
             "duration_sec": round(self.duration_sec, 2),
             "status": {
                 "has_transcription": self.has_transcription,
-                "has_diarization": self.has_diarization,
                 "whisper_model": self.whisper_model,
                 "speakers_count": self.speakers_count,
                 "speakers_detected": self.speakers_detected
@@ -197,7 +194,6 @@ class TranscriptionSession:
             created_at=data.get("created_at"),
             whisper_model=status.get("whisper_model", ""),
             has_transcription=status.get("has_transcription", False),
-            has_diarization=status.get("has_diarization", False),
             speakers_detected=status.get("speakers_detected", []),
             speaker_mapping=data.get("speaker_mapping", {}),
             words=data.get("words", []),
@@ -342,13 +338,10 @@ class TranscriptionSession:
 
     def get_status_badge(self) -> str:
         """
-        Zwraca etykietę statusu sesji, np. '[👥 Mówcy (3 os.)]' lub '[📝 Tylko tekst]'.
+        Zwraca etykietę statusu sesji, np. '[📝 Transkrypcja]' lub '[⏳ W toku]'.
         """
-        if self.has_diarization:
-            cnt = self.speakers_count
-            return f"[👥 Mówcy ({cnt} os.)]" if cnt > 0 else "[👥 Mówcy]"
-        elif self.has_transcription:
-            return "[📝 Tylko tekst]"
+        if self.has_transcription:
+            return "[📝 Transkrypcja]"
         return "[⏳ W toku]"
 
 
@@ -404,3 +397,89 @@ def find_existing_session_for_audio(audio_path: str, transcriptions_dir: str) ->
                     return full_json_path, session
 
     return None
+
+
+def join_words_clean(words_list: List[Any]) -> str:
+    """
+    Łączy listę słów w spójne zdanie z zachowaniem prawidłowych spacji i interpunkcji.
+    Nigdy nie skleja słów bez spacji (zapobiega 'Mówiliśmyżeosobno').
+    """
+    if not words_list:
+        return ""
+    result = []
+    for w in words_list:
+        w_str = str(w)
+        if not w_str:
+            continue
+        if w_str.startswith(" "):
+            result.append(w_str)
+        elif w_str in {".", ",", "!", "?", ":", ";", "...", "%"} or (len(w_str) == 1 and not w_str.isalnum()):
+            result.append(w_str)
+        else:
+            if result and not result[-1].endswith(" "):
+                result.append(" " + w_str)
+            else:
+                result.append(w_str)
+    return "".join(result).strip()
+
+
+def format_words_to_turns(transcript_words: List[Dict[str, Any]],
+                                          session_start_time: Optional[datetime] = None) -> Tuple[str, str, List[Dict[str, Any]]]:
+    """
+    Grupuje słowa w czytelne bloki zdań z timestampami.
+    Zwraca (final_html, final_plain, turns).
+    """
+    if not transcript_words:
+        return "Brak zarejestrowanej mowy.", "Brak zarejestrowanej mowy.", []
+
+    chunks = []
+    current_chunk_words = []
+    chunk_start = transcript_words[0]["start"]
+    last_end = transcript_words[0]["end"]
+
+    for w in transcript_words:
+        w_word = w.get("word", "")
+        w_start = w.get("start", last_end)
+        w_end = w.get("end", w_start)
+
+        is_long_pause = (w_start - last_end) > 1.2
+        is_sentence_end = any(current_chunk_words) and str(current_chunk_words[-1]).rstrip().endswith((".", "!", "?")) and len(current_chunk_words) >= 8
+
+        if current_chunk_words and (is_long_pause or is_sentence_end):
+            text = join_words_clean(current_chunk_words)
+            if text:
+                chunks.append((chunk_start, last_end, text))
+            current_chunk_words = []
+            chunk_start = w_start
+
+        current_chunk_words.append(w_word)
+        last_end = w_end
+
+    if current_chunk_words:
+        text = join_words_clean(current_chunk_words)
+        if text:
+            chunks.append((chunk_start, last_end, text))
+
+    from recorder.config import get_preview_order
+    final_plain = ""
+    turns = []
+
+    for start_t, end_t, text in chunks:
+        turns.append({
+            "id": str(uuid.uuid4()),
+            "start": start_t,
+            "end": end_t,
+            "speaker": "Mówca",
+            "text": text
+        })
+        time_label = format_turn_timestamp(start_t, end_t, session_start_time)
+        final_plain += f"[{time_label}]: {text}\n\n"
+
+    reverse_order = (get_preview_order() == "newest_first")
+    display_chunks = list(reversed(chunks)) if reverse_order else chunks
+    final_html = ""
+    for start_t, end_t, text in display_chunks:
+        time_label = format_turn_timestamp(start_t, end_t, session_start_time)
+        final_html += f"<b>[{time_label}]:</b> {text}<br><br>"
+
+    return final_html, final_plain, turns

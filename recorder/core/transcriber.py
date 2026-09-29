@@ -300,7 +300,7 @@ class WhisperEngine(AsrEngine):
         effective_beam = beam_size if beam_size is not None else get_beam_size()
 
         # Blok został już wycięty przez nasz Silero VAD, więc drugi VAD wewnątrz faster-whisper (vad_filter)
-        # oraz word_timestamps (dodatkowe przejście modelu, niepotrzebne bez diaryzacji) są wyłączone.
+        # oraz word_timestamps (dodatkowe przejście modelu, niepotrzebne w transkrypcji na żywo) są wyłączone.
         # Czas słów wynika z segmentów (rozkładany równomiernie w ścieżce fallback poniżej).
         segments, _ = self._model.transcribe(
             audio_norm,
