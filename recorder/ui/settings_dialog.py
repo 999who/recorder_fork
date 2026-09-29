@@ -250,6 +250,13 @@ class SettingsDialog(QDialog):
         self.combo_onnx_threads.setToolTip("Liczba wątków onnxruntime używanych przez Parakeet. Mniej wątków = niższe obciążenie CPU.")
         engine_layout.addRow("Wątki Parakeet:", self.combo_onnx_threads)
 
+        self.chk_polish_only = QCheckBox("Odrzucaj fragmenty rozpoznane jako angielskie (tylko język polski)")
+        self.chk_polish_only.setToolTip(
+            "Parakeet v3 jest wielojęzyczny i na cichych/niewyraźnych fragmentach czasem zwraca angielskie zdania. "
+            "Po włączeniu takie fragmenty są pomijane. Wyłącz, jeśli w rozmowach pojawia się prawdziwy angielski."
+        )
+        engine_layout.addRow(self.chk_polish_only)
+
         path_row = QHBoxLayout()
         self.txt_parakeet_path = QLineEdit()
         self.txt_parakeet_path.setPlaceholderText("Puste = pobranie modelu z internetu przy pierwszym uruchomieniu")
@@ -959,6 +966,7 @@ class SettingsDialog(QDialog):
         self.combo_engine.setCurrentIndex(e_idx if e_idx != -1 else 0)
         t_idx0 = self.combo_onnx_threads.findData(max(2, min(4, int(st.get("onnx_threads", 3)))))
         self.combo_onnx_threads.setCurrentIndex(t_idx0 if t_idx0 != -1 else 1)
+        self.chk_polish_only.setChecked(bool(st.get("polish_only_filter", True)))
         self.txt_parakeet_path.setText(str(st.get("parakeet_model_path", "")))
         self.table_replacements.setRowCount(0)
         for wrong, right in normalize_pairs(st.get("custom_replacements", [])):
@@ -1096,6 +1104,7 @@ class SettingsDialog(QDialog):
             self.chk_adaptive_beam.setChecked(False)
             self.combo_engine.setCurrentIndex(0)
             self.combo_onnx_threads.setCurrentIndex(self.combo_onnx_threads.findData(3))
+            self.chk_polish_only.setChecked(True)
             self.txt_parakeet_path.clear()
 
     def _save_and_accept(self):
@@ -1106,6 +1115,7 @@ class SettingsDialog(QDialog):
             "adaptive_beam_size": self.chk_adaptive_beam.isChecked(),
             "asr_engine": self.combo_engine.currentData() or "",
             "onnx_threads": int(self.combo_onnx_threads.currentData() or 3),
+            "polish_only_filter": self.chk_polish_only.isChecked(),
             "parakeet_model_path": self.txt_parakeet_path.text().strip(),
             "custom_replacements": self._collect_replacements(),
             "replacements_for_whisper": self.chk_repl_whisper.isChecked(),

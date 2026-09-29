@@ -12,6 +12,7 @@ import numpy as np
 import soundfile as sf
 
 from recorder.audio.converter import preprocess_speech_audio, highpass_filter_audio, normalize_audio
+from recorder.core.langfilter import is_foreign_language
 from recorder.core.asr_engine import AsrEngine, ENGINE_PARAKEET, StatusCallback, Word
 from recorder.core.transcriber import clean_repeated_text, is_hallucination, filter_repeated_words_list
 
@@ -96,10 +97,12 @@ class ParakeetEngine(AsrEngine):
 
     engine_id = ENGINE_PARAKEET
 
-    def __init__(self, threads: int = 3, model_path: str = "", replacements: Optional[List[Tuple[str, str]]] = None):
+    def __init__(self, threads: int = 3, model_path: str = "", replacements: Optional[List[Tuple[str, str]]] = None,
+                 polish_only: Optional[bool] = None):
         self.threads = max(1, int(threads))
         self.model_path = (model_path or "").strip()
         self.replacements = replacements
+        self.polish_only = polish_only
         self._model = None
 
     @property
@@ -155,10 +158,19 @@ class ParakeetEngine(AsrEngine):
         words = tokens_to_words(res.tokens or [], res.timestamps, len(audio) / SAMPLE_RATE)
         return text, words
 
+    def _polish_only(self) -> bool:
+        """Czy odrzucać bloki rozpoznane jako angielskie (ustawienie; można je wyłączyć w ustawieniach)."""
+        if self.polish_only is not None:
+            return bool(self.polish_only)
+        from recorder.config import is_polish_only_filter
+        return is_polish_only_filter()
+
     def _postprocess(self, text: str, words: List[Word]) -> List[Word]:
         """Filtry anty-halucynacyjne, deduplikacja powtórzeń i autokorekty słownika."""
         cleaned = clean_repeated_text(text)
         if not words or not cleaned or is_hallucination(text, cleaned):
+            return []
+        if self._polish_only() and is_foreign_language(cleaned):
             return []
         words = filter_repeated_words_list(words, max_consecutive=2)
         from recorder.core.replacements import apply_word_replacements

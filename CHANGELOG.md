@@ -1,5 +1,6 @@
 ## [Unreleased]: Silnik Parakeet, usunięcie torch/PyQt6/diaryzacji
 
+- Filtr języka: Parakeet v3 jest wielojęzyczny, więc fragmenty rozpoznane jako angielskie są pomijane (ustawienie „tylko język polski”).
 - Nowy silnik NVIDIA Parakeet TDT 0.6B v3 (onnx-asr, onnxruntime CPU int8) obok Whispera; wspólny interfejs `AsrEngine`.
 - Wybór silnika i liczby wątków (2–4) w ustawieniach; bez CUDA domyślnie Parakeet.
 - Profile cięcia bloków per silnik (konfigurowalne), nakładka przy wymuszonym cięciu z usuwaniem duplikatów słów.

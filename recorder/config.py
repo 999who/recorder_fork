@@ -242,6 +242,7 @@ def load_user_settings(force_reload: bool = False) -> dict:
         "adaptive_beam_size": False,
         "asr_engine": get_env_variable("ASR_ENGINE", ""),  # "" = automatycznie (Parakeet bez CUDA, Whisper z CUDA)
         "onnx_threads": int(get_env_variable("ONNX_THREADS", "3")),
+        "polish_only_filter": get_env_variable("POLISH_ONLY_FILTER", "true").lower() in ("1", "true", "yes"),
         "parakeet_model_path": get_env_variable("PARAKEET_MODEL_PATH", ""),
         "custom_replacements": [],            # lista par [błędnie, poprawnie] stosowana po rozpoznaniu
         "replacements_for_whisper": False,    # autokorekty domyślnie tylko dla Parakeet (Whisper ma initial_prompt)
@@ -339,6 +340,11 @@ def get_asr_engine() -> str:
     if eid in ("parakeet", "whisper"):
         return eid
     return "whisper" if get_hardware_acceleration_info().get("is_cuda") else "parakeet"
+
+
+def is_polish_only_filter() -> bool:
+    """Czy Parakeet ma odrzucać bloki rozpoznane jako angielskie (model v3 nie pozwala wymusić języka)."""
+    return bool(load_user_settings().get("polish_only_filter", True))
 
 
 def get_onnx_threads() -> int:
