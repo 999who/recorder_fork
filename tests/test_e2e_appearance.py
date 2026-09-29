@@ -25,21 +25,13 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# Qt imports supporting PySide6 (primary) and PyQt6 fallback
-try:
-    from PySide6.QtWidgets import (
-        QApplication, QWidget, QDialog, QMainWindow, QSlider, QSpinBox,
-        QCheckBox, QComboBox, QLabel, QSystemTrayIcon, QMenu
-    )
-    from PySide6.QtCore import Qt, QByteArray, QPoint, QSize, QRect
-    from PySide6.QtGui import QColor, QFont, QPalette, QIcon, QFontDatabase, QCloseEvent
-except ImportError:
-    from PyQt6.QtWidgets import (
-        QApplication, QWidget, QDialog, QMainWindow, QSlider, QSpinBox,
-        QCheckBox, QComboBox, QLabel, QSystemTrayIcon, QMenu
-    )
-    from PyQt6.QtCore import Qt, QByteArray, QPoint, QSize, QRect
-    from PyQt6.QtGui import QColor, QFont, QPalette, QIcon, QFontDatabase, QCloseEvent
+# Importy Qt (PySide6)
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QDialog, QMainWindow, QSlider, QSpinBox,
+    QCheckBox, QComboBox, QLabel, QSystemTrayIcon, QMenu
+)
+from PySide6.QtCore import Qt, QByteArray, QPoint, QSize, QRect
+from PySide6.QtGui import QColor, QFont, QPalette, QIcon, QFontDatabase, QCloseEvent
 
 
 # ==============================================================================

@@ -19,14 +19,9 @@ from typing import Dict, List, Optional, Union
 
 from recorder.config import THEME_SPEAKER_COLORS, get_speaker_colors
 
-try:
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QPalette, QColor, QFont, QFontDatabase, QGuiApplication
-    from PySide6.QtWidgets import QApplication, QWidget
-except ImportError:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QPalette, QColor, QFont, QFontDatabase, QGuiApplication
-    from PyQt6.QtWidgets import QApplication, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette, QColor, QFont, QFontDatabase, QGuiApplication
+from PySide6.QtWidgets import QApplication, QWidget
 
 logger = logging.getLogger("recorder.ui.theme")
 

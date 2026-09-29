@@ -20,20 +20,12 @@ import tracemalloc
 from typing import List, Dict, Any
 import pytest
 
-try:
-    from PySide6.QtCore import Qt, qInstallMessageHandler, QtMsgType
-    from PySide6.QtWidgets import (
-        QApplication, QWidget, QPushButton, QTextEdit,
-        QGroupBox, QComboBox, QSlider, QProgressBar, QLabel,
-        QVBoxLayout, QTabWidget, QListWidget
-    )
-except ImportError:
-    from PyQt6.QtCore import Qt, qInstallMessageHandler, QtMsgType
-    from PyQt6.QtWidgets import (
-        QApplication, QWidget, QPushButton, QTextEdit,
-        QGroupBox, QComboBox, QSlider, QProgressBar, QLabel,
-        QVBoxLayout, QTabWidget, QListWidget
-    )
+from PySide6.QtCore import Qt, qInstallMessageHandler, QtMsgType
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QPushButton, QTextEdit,
+    QGroupBox, QComboBox, QSlider, QProgressBar, QLabel,
+    QVBoxLayout, QTabWidget, QListWidget
+)
 
 import psutil
 from recorder.ui.theme import (

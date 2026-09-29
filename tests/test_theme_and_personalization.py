@@ -21,12 +21,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-try:
-    from PySide6.QtWidgets import QApplication, QWidget
-    from PySide6.QtGui import QFont, QPalette, QColor
-except ImportError:
-    from PyQt6.QtWidgets import QApplication, QWidget
-    from PyQt6.QtGui import QFont, QPalette, QColor
+from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtGui import QFont, QPalette, QColor
 
 from recorder.ui import theme
 

@@ -9,20 +9,12 @@ Zawiera:
 
 from typing import Callable, Dict, Optional
 
-try:
-    from PySide6.QtCore import Qt, Signal
-    from PySide6.QtGui import QColor, QFont, QCursor
-    from PySide6.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-        QSlider, QComboBox, QCheckBox, QGroupBox, QFrame, QSizePolicy
-    )
-except ImportError:
-    from PyQt6.QtCore import Qt, pyqtSignal as Signal
-    from PyQt6.QtGui import QColor, QFont, QCursor
-    from PyQt6.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-        QSlider, QComboBox, QCheckBox, QGroupBox, QFrame, QSizePolicy
-    )
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QFont, QCursor
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QSlider, QComboBox, QCheckBox, QGroupBox, QFrame, QSizePolicy
+)
 
 from recorder.ui.theme import THEMES, ThemeDefinition, get_available_themes
 

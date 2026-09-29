@@ -6,21 +6,12 @@ import pytest
 if "QT_QPA_PLATFORM" not in os.environ:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PySide6.QtWidgets import QApplication
-except ImportError:
-    try:
-        from PyQt6.QtWidgets import QApplication
-    except ImportError:
-        QApplication = None
+from PySide6.QtWidgets import QApplication
 
 
 @pytest.fixture(scope="session")
 def qapp():
     """Provides a headless QApplication instance for Qt-dependent tests with clean teardown."""
-    if QApplication is None:
-        pytest.skip("Neither PySide6 nor PyQt6 is available")
-
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
@@ -41,13 +32,7 @@ def qapp():
             if cb is not None:
                 cb.clear()
         except Exception:
-            try:
-                from PyQt6.QtGui import QGuiApplication
-                cb = QGuiApplication.clipboard()
-                if cb is not None:
-                    cb.clear()
-            except Exception:
-                pass
+            pass
 
         app.processEvents()
         for widget in list(app.topLevelWidgets()):

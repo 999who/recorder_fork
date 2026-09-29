@@ -24,14 +24,9 @@ if PROJECT_ROOT not in sys.path:
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox
-    from PySide6.QtGui import QCloseEvent
-    from PySide6.QtCore import Qt
-except ImportError:
-    from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox
-    from PyQt6.QtGui import QCloseEvent
-    from PyQt6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtCore import Qt
 
 from recorder.ui.window import SmartDictaphoneWindow
 from recorder.ui.appearance_tab import AppearanceTab
