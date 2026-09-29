@@ -1,56 +1,83 @@
 import os
 import sys
+import threading
 import numpy as np
 
-_silero_model = None
+# Silero VAD uruchamiany bezpośrednio przez onnxruntime (bez torch).
+# Model: recorder/resources/vad/silero_vad.onnx (licencja MIT, patrz LICENSE-silero-vad.txt).
+_silero_session = None
 _silero_available = False
+_silero_lock = threading.Lock()
+
+_CONTEXT_SAMPLES = 64    # kontekst dołączany do każdego okna 512 próbek (wymóg modelu przy 16 kHz)
+_WINDOW_SAMPLES = 512    # 32 ms @ 16 kHz
+
+
+def _find_model_path() -> str:
+    candidates = []
+    meipass = getattr(sys, "_MEIPASS", "")
+    if meipass:
+        candidates.append(os.path.join(meipass, "recorder", "resources", "vad", "silero_vad.onnx"))
+    candidates.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "vad", "silero_vad.onnx"))
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return ""
+
 
 try:
-    import torch
-    import io
-    import warnings
-    import silero_vad
-    jit_path = os.path.join(os.path.dirname(silero_vad.__file__), 'data', 'silero_vad.jit')
-    if os.path.exists(jit_path):
-        with open(jit_path, 'rb') as f:
-            model_bytes = io.BytesIO(f.read())
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                _silero_model = torch.jit.load(model_bytes)
-            _silero_model.eval()
-            _silero_available = True
-            print("Sukces: Model Silero VAD AI został pomyślnie załadowany do pamięci!")
-    else:
-        from silero_vad import load_silero_vad
-        _silero_model = load_silero_vad()
-        _silero_available = True
+    import onnxruntime as _ort
+
+    _model_path = _find_model_path()
+    if not _model_path:
+        raise FileNotFoundError("brak pliku recorder/resources/vad/silero_vad.onnx")
+    _opts = _ort.SessionOptions()
+    _opts.intra_op_num_threads = 1
+    _opts.inter_op_num_threads = 1
+    _silero_session = _ort.InferenceSession(_model_path, sess_options=_opts, providers=["CPUExecutionProvider"])
+    _silero_available = True
+    print("Sukces: Model Silero VAD (ONNX) został pomyślnie załadowany do pamięci!")
 except Exception as e:
     print(f"Informacja VAD: {e}")
 
 
-import threading
-_silero_lock = threading.Lock()
-
 def is_silero_available() -> bool:
-    return _silero_available and _silero_model is not None
+    return _silero_available and _silero_session is not None
 
 
 class SileroVADDetector:
     """
     Klasa odpowiedzialna za detekcję aktywności głosowej (Voice Activity Detection)
-    z użyciem sieci neuronowej Silero VAD. Obsługuje dowolne rozmiary próbek wejściowych
+    z użyciem sieci neuronowej Silero VAD (ONNX). Obsługuje dowolne rozmiary próbek wejściowych
     dzięki wewnętrznemu buforowaniu do wymaganych okien (512 próbek / 32ms @ 16kHz).
+    Każdy detektor ma własny stan sieci, więc kanał mikrofonu i systemu nie zakłócają się nawzajem.
     """
     def __init__(self, speech_threshold: float = 0.35, default_samplerate: int = 16000):
         self.speech_threshold = speech_threshold
         self.samplerate = default_samplerate
         self._buffer = np.array([], dtype=np.float32)
         self._last_speech_prob = 0.0
+        self._state = np.zeros((2, 1, 128), dtype=np.float32)
+        self._context = np.zeros((1, _CONTEXT_SAMPLES), dtype=np.float32)
 
     def reset(self):
-        """Czyści wewnętrzny bufor próbek."""
+        """Czyści wewnętrzny bufor próbek i stan sieci."""
         self._buffer = np.array([], dtype=np.float32)
         self._last_speech_prob = 0.0
+        self._state = np.zeros((2, 1, 128), dtype=np.float32)
+        self._context = np.zeros((1, _CONTEXT_SAMPLES), dtype=np.float32)
+
+    def _infer_window(self, window: np.ndarray) -> float:
+        """Jedno okno 512 próbek -> prawdopodobieństwo mowy (aktualizuje stan i kontekst detektora)."""
+        frame = np.concatenate([self._context, window.reshape(1, -1)], axis=1)
+        with _silero_lock:
+            out, new_state = _silero_session.run(
+                ["output", "stateN"],
+                {"input": frame, "state": self._state, "sr": np.array(16000, dtype=np.int64)},
+            )
+        self._state = new_state
+        self._context = frame[:, -_CONTEXT_SAMPLES:]
+        return float(out[0][0])
 
     def process_chunk(self, audio_data: np.ndarray, samplerate: int = 16000, rms_level: float = 0.0):
         """
@@ -68,15 +95,11 @@ class SileroVADDetector:
         chunk_rms = (norm / np.sqrt(len(flat_audio))) if len(flat_audio) > 0 else 0.0
 
         if is_silero_available():
-            while len(self._buffer) >= 512:
-                chunk_512 = self._buffer[:512]
-                self._buffer = self._buffer[512:]
+            while len(self._buffer) >= _WINDOW_SAMPLES:
+                window = self._buffer[:_WINDOW_SAMPLES]
+                self._buffer = self._buffer[_WINDOW_SAMPLES:]
                 try:
-                    import torch
-                    tensor_data = torch.from_numpy(chunk_512).float()
-                    ctx = torch.inference_mode() if hasattr(torch, "inference_mode") else torch.no_grad()
-                    with ctx, _silero_lock:
-                        self._last_speech_prob = float(_silero_model(tensor_data, 16000).item())
+                    self._last_speech_prob = self._infer_window(window)
                 except Exception:
                     pass
         else:

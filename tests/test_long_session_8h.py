@@ -240,7 +240,7 @@ def test_rolling_worker_disk_throttling_8h_simulation():
 def test_vad_inference_mode_thread_safety():
     """
     Weryfikuje współbieżną ocenę fragmentów audio przez model Silero VAD w wielu wątkach
-    z użyciem torch.inference_mode() i wewnętrznego rygla wątkowego _silero_lock.
+    (ONNX, onnxruntime) i wewnętrznego rygla wątkowego _silero_lock.
     """
     errors = []
 

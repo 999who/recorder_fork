@@ -1,6 +1,5 @@
 # Podstawowy interfejs GUI i audio
 PySide6>=6.6.0
-PyQt6>=6.6.0
 sounddevice>=0.4.6
 pyaudiowpatch>=0.2.12.8
 pycaw>=20240210
@@ -12,9 +11,8 @@ scipy>=1.10.0
 # Bezpieczna ekstrakcja audio z dowolnych formatów wideo/audio (MP4, MP3, MOV, M4A)
 imageio-ffmpeg>=0.4.9
 
-# AI: Detekcja mowy (Silero VAD) oraz Transkrypcja (Faster-Whisper)
-torch>=2.0.0
-silero-vad>=5.1.0
+# AI: Detekcja mowy (Silero VAD w ONNX, plik modelu w recorder/resources/vad) oraz Transkrypcja (Faster-Whisper)
+onnxruntime>=1.18.1,!=1.24.1,!=1.25.*,!=1.26.0
 faster-whisper>=1.0.0
 
 # AI: Parakeet TDT 0.6B v3 (onnx-asr, onnxruntime na CPU, model pobierany z HuggingFace)

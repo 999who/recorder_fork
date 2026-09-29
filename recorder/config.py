@@ -566,12 +566,9 @@ def get_hardware_acceleration_info() -> dict:
     i dobiera optymalny typ obliczeń (compute_type) oraz liczbę wątków roboczych.
     """
     cuda_available = False
-    gpu_name = ""
     try:
-        import torch
-        if torch.cuda.is_available():
-            cuda_available = True
-            gpu_name = torch.cuda.get_device_name(0)
+        import ctranslate2
+        cuda_available = ctranslate2.get_cuda_device_count() > 0
     except Exception:
         cuda_available = False
 
@@ -582,7 +579,7 @@ def get_hardware_acceleration_info() -> dict:
             "cpu_threads": 4,
             "is_cuda": True,
             "is_ryzen_ai": False,
-            "badge_text": f"🚀 Akceleracja: NVIDIA GPU ({gpu_name}) • float16",
+            "badge_text": "🚀 Akceleracja: NVIDIA GPU (CUDA) • float16",
             "summary": "GPU (CUDA float16)"
         }
 
