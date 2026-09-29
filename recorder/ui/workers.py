@@ -21,9 +21,7 @@ from recorder.config import (
     RMS_SILENCE_THRESHOLD,
     get_default_model_id,
     SESSION_SPLIT_SILENCE_SEC,
-    LIVE_BLOCK_MIN_SEC,
-    LIVE_BLOCK_MAX_SEC,
-    LIVE_BLOCK_SILENCE_CUT_SEC,
+    get_block_profile,
     get_record_source_mode,
     get_loopback_device_index,
     get_system_vad_speech_threshold,
@@ -35,6 +33,7 @@ from recorder.audio.capture import save_wav_file, StreamingWavWriter
 from recorder.audio.converter import resample_to_16k, prepare_audio_file
 from recorder.audio.devices import HAS_PYAUDIOWPATCH, TargetAppAudioMonitor, clean_device_name
 from recorder.core.vad import SileroVADDetector, is_silero_available
+from recorder.core.blocks import should_cut_block
 from recorder.core.asr_engine import create_asr_engine
 from recorder.core.diarizer import DiarizationEngine, format_transcript_without_diarization
 
@@ -189,11 +188,8 @@ class SmartAudioWorker(QThread):
     silence_alert_signal = pyqtSignal(float, str)              # Ostrzeżenie strażnika ciszy (silence_sec, source_mode)
     error_signal = pyqtSignal(str)
 
-    # Parametry okna bezpiecznego cięcia w tle (Safe VAD Boundary Handoff)
-    MIN_BLOCK_DURATION_SEC = LIVE_BLOCK_MIN_SEC          # Szybki podgląd po min. 15s mowy
-    SAFE_SILENCE_CUT_THRESHOLD_SEC = LIVE_BLOCK_SILENCE_CUT_SEC   # Wymagane min. 1.0s ciszy potwierdzonej przez Silero VAD
-    MAX_BLOCK_DURATION_SEC = LIVE_BLOCK_MAX_SEC          # Maksymalny czas bloku 45 sekund
-    OVERLAP_SAMPLES = int(0.5 * 16000)      # 0.5s nakładki akustycznej na styku
+    # Nakładka audio (próbki) przenoszona do następnego bloku przy wymuszonym cięciu w środku mowy
+    OVERLAP_SAMPLES = int(0.5 * 16000)
 
     def __init__(self, samplerate=SAMPLE_RATE, channels=AUDIO_CHANNELS, device_index=None,
                  loopback_device_index=None, source_mode=None, auto_pause_sec=DEFAULT_AUTO_PAUSE_SEC):
@@ -209,6 +205,10 @@ class SmartAudioWorker(QThread):
         self.session_split_silence_sec = get_session_split_silence_sec()
         self.silence_alert_sec = get_silence_alert_seconds()
         self.silence_alert_emitted = False
+
+        # Profil cięcia bloków zależny od silnika (Parakeet: krótkie bloki, Whisper: długie)
+        self.block_profile = get_block_profile()
+        self.OVERLAP_SAMPLES = int(self.block_profile.overlap_sec * 16000)
 
         # Dwa niezależne detektory VAD dla mikrofonu oraz dla dźwięku systemu/Discorda
         mic_th = get_vad_speech_threshold()
@@ -266,6 +266,12 @@ class SmartAudioWorker(QThread):
         self.phrase_speech_detected = False
         import threading
         self._lock = threading.Lock()
+
+    def set_block_profile_for_model(self, model_id: Optional[str]):
+        """Ustawia profil cięcia bloków dla wybranego modelu ('parakeet' lub rozmiar Whispera)."""
+        engine_id = "parakeet" if model_id == "parakeet" else ("whisper" if model_id else "")
+        self.block_profile = get_block_profile(engine_id)
+        self.OVERLAP_SAMPLES = int(self.block_profile.overlap_sec * 16000)
 
     def set_auto_pause_sec(self, seconds: float):
         try:
@@ -683,15 +689,13 @@ class SmartAudioWorker(QThread):
                                     cur_dur = cur_len / 16000.0
                                     sil_dur = self.sys_silence_samples / 16000.0
 
-                                    is_ready = (
-                                        (cur_dur >= 6.0 and sil_dur >= 0.5) or
-                                        (cur_dur >= 14.0 and sil_dur >= 0.3) or
-                                        (cur_dur >= 25.0) or
-                                        (cur_dur >= 2.0 and self.state == SmartRecordState.AUTO_PAUSED)
+                                    is_ready, forced = should_cut_block(
+                                        cur_dur, sil_dur, self.state == SmartRecordState.AUTO_PAUSED, self.block_profile
                                     )
-                                    if is_ready and cur_dur >= 1.5:
+                                    if is_ready:
                                         arr = np.concatenate(self.current_sys_block_chunks)
-                                        self.current_sys_block_chunks = []
+                                        # Wymuszone cięcie w środku mowy: ogon audio wraca na początek następnego bloku
+                                        self.current_sys_block_chunks = [arr[-self.OVERLAP_SAMPLES:].copy()] if (forced and self.OVERLAP_SAMPLES > 0) else []
                                         self.sys_silence_samples = 0
                                         en_sec = round(self.audio_mixer.get_current_timeline_samples() / 16000.0, 2)
                                         st_sec = max(0.0, round(en_sec - cur_dur, 2))
@@ -818,15 +822,13 @@ class SmartAudioWorker(QThread):
                                     cur_dur = cur_len / 16000.0
                                     sil_dur = self.mic_silence_samples / 16000.0
 
-                                    is_ready = (
-                                        (cur_dur >= 6.0 and sil_dur >= 0.5) or
-                                        (cur_dur >= 14.0 and sil_dur >= 0.3) or
-                                        (cur_dur >= 25.0) or
-                                        (cur_dur >= 2.0 and self.state == SmartRecordState.AUTO_PAUSED)
+                                    is_ready, forced = should_cut_block(
+                                        cur_dur, sil_dur, self.state == SmartRecordState.AUTO_PAUSED, self.block_profile
                                     )
-                                    if is_ready and cur_dur >= 1.5:
+                                    if is_ready:
                                         block_arr = np.concatenate(self.current_mic_block_chunks)
-                                        self.current_mic_block_chunks = []
+                                        # Wymuszone cięcie w środku mowy: ogon audio wraca na początek następnego bloku
+                                        self.current_mic_block_chunks = [block_arr[-self.OVERLAP_SAMPLES:].copy()] if (forced and self.OVERLAP_SAMPLES > 0) else []
                                         self.mic_silence_samples = 0
                                         end_sec = round(self.audio_mixer.get_current_timeline_samples() / 16000.0, 2)
                                         start_sec = max(0.0, round(end_sec - cur_dur, 2))

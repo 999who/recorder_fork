@@ -299,22 +299,19 @@ class WhisperEngine(AsrEngine):
         audio_norm = normalize_audio(audio_clean, target_peak=0.92)
         effective_beam = beam_size if beam_size is not None else get_beam_size()
 
+        # Blok został już wycięty przez nasz Silero VAD, więc drugi VAD wewnątrz faster-whisper (vad_filter)
+        # oraz word_timestamps (dodatkowe przejście modelu, niepotrzebne bez diaryzacji) są wyłączone.
+        # Czas słów wynika z segmentów (rozkładany równomiernie w ścieżce fallback poniżej).
         segments, _ = self._model.transcribe(
             audio_norm,
-            word_timestamps=True,
+            word_timestamps=False,
             language="pl",
             beam_size=effective_beam,
             temperature=0.0,
             condition_on_previous_text=False,
             no_speech_threshold=0.6,
             compression_ratio_threshold=2.4,
-            vad_filter=True,
-            vad_parameters=dict(
-                threshold=0.35,
-                min_speech_duration_ms=200,
-                min_silence_duration_ms=400,
-                speech_pad_ms=400
-            ),
+            vad_filter=False,
             initial_prompt=get_full_initial_prompt()
         )
 

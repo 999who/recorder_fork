@@ -1506,6 +1506,7 @@ class SmartDictaphoneWindow(QMainWindow):
         threshold_sec = self.slider_silence.value()
         self.worker.set_auto_pause_sec(threshold_sec)
         self.worker.set_session_split_silence_sec(get_session_split_silence_sec())
+        self.worker.set_block_profile_for_model(selected_model)
         self.worker.start_recording(
             device_index=selected_mic,
             loopback_device_index=selected_loopback,

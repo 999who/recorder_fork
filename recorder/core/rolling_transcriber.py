@@ -9,6 +9,7 @@ from datetime import datetime
 from PySide6.QtCore import QThread, Signal as pyqtSignal
 
 from recorder.core.asr_engine import create_asr_engine
+from recorder.core.transcriber import filter_repeated_words_list
 from recorder.core.diarizer import format_transcript_without_diarization
 from recorder.core.speakers import format_turns, suggest_speaker_names
 from recorder.config import (
@@ -68,6 +69,10 @@ class RollingTranscriptionWorker(QThread):
         self._is_running: bool = False
         self.transcriber = create_asr_engine(model_size=self.model_size)
         
+        # Stan dedupikacji na styku bloków z nakładką (osobno dla kanału mikrofonu i systemu)
+        self._last_block_end: Dict[str, float] = {}
+        self._channel_tail: Dict[str, List[Dict[str, Any]]] = {}
+
         self.processed_blocks: List[RollingBlock] = []
         self.all_turns: List[Dict[str, Any]] = []
         self._all_words: List[Dict[str, Any]] = []
@@ -112,6 +117,8 @@ class RollingTranscriptionWorker(QThread):
                     session_start_time = None
             self.session_start_time = session_start_time
         self.processed_blocks = []
+        self._last_block_end = {}
+        self._channel_tail = {}
         self.all_turns = []
         self._all_words = []
         self.total_processed_seconds = 0.0
@@ -258,6 +265,8 @@ class RollingTranscriptionWorker(QThread):
         except Exception as trans_err:
             print(f"[ROLLING] Pominięto fragment bloku #{block.block_index}: {trans_err}")
 
+        transcript_words = self._dedupe_overlap(block, transcript_words)
+
         # Formatowanie słów tego bloku do turnów
         block.words = transcript_words
         if transcript_words:
@@ -335,6 +344,30 @@ class RollingTranscriptionWorker(QThread):
             full_plain,
             full_html
         )
+
+    def _dedupe_overlap(self, block: "RollingBlock", words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Usuwa dubel słów na styku bloków. Wymuszone cięcie w środku mowy kopiuje ogon audio (nakładkę)
+        do początku następnego bloku, więc te same słowa mogą zostać rozpoznane dwa razy. Nakładkę rozpoznajemy
+        po tym, że blok zaczyna się przed końcem poprzedniego bloku tego samego kanału. Powtórzenia na styku
+        usuwa istniejący filtr powtórzeń (filter_repeated_words_list) działający na ogonie poprzedniego bloku
+        i głowie nowego.
+        """
+        ch = block.channel_source
+        prev_end = self._last_block_end.get(ch)
+        tail = self._channel_tail.get(ch, [])
+        self._last_block_end[ch] = max(prev_end or 0.0, float(block.end_sec))
+
+        if words and tail and prev_end is not None and block.start_sec < prev_end - 0.01:
+            junction_tail = [w for w in tail if w["end"] > block.start_sec - 0.2]
+            if junction_tail:
+                head, rest = words[:6], words[6:]
+                kept = {id(w) for w in filter_repeated_words_list(junction_tail + head, max_consecutive=1)}
+                words = [w for w in head if id(w) in kept] + rest
+
+        if words:
+            self._channel_tail[ch] = (tail + words)[-6:]
+        return words
 
     def _compile_full_transcript(self, theme_id: Optional[str] = None):
         """Kompiluje dotychczasowe wypowiedzi w spójną transkrypcję posortowaną chronologicznie z kolorami motywu."""

@@ -185,10 +185,54 @@ MAX_SESSION_DURATION_SEC = float(get_env_variable("MAX_SESSION_HOURS", "2.0")) *
 LIVE_STREAMING_ENABLED = get_env_variable("LIVE_STREAMING_ENABLED", "true").lower() in ("1", "true", "yes")
 DEFAULT_SILENCE_ALERT_MINUTES = float(get_env_variable("SILENCE_ALERT_MINUTES", "5.0"))
 
-# Parametry szybkiej transmisji bloków mowy na żywo do CRM (zamiast czekania 2 minut)
-LIVE_BLOCK_MIN_SEC = float(get_env_variable("LIVE_BLOCK_MIN_SEC", "15.0"))          # Szybki podgląd po min. 15s mowy
-LIVE_BLOCK_MAX_SEC = float(get_env_variable("LIVE_BLOCK_MAX_SEC", "45.0"))          # Maksymalny czas bloku przed wymuszeniem cięcia na pauzie
-LIVE_BLOCK_SILENCE_CUT_SEC = float(get_env_variable("LIVE_BLOCK_SILENCE_CUT_SEC", "1.0"))  # Min. 1.0s ciszy VAD na naturalnym końcu zdania
+# Parametry narzędzia cięcia bloków mowy na żywo - osobne profile dla każdego silnika.
+# Whisper zawsze liczy okno 30 s, więc opłaca się dawać mu długie bloki; Parakeet liczy proporcjonalnie
+# do długości dźwięku, więc krótkie bloki skracają opóźnienie tekstu w CRM bez kary kosztowej.
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class BlockProfile:
+    """Reguła cięcia bloku (sekundy). Blok jest zamykany, gdy spełniony jest którykolwiek warunek:
+    1. czas >= min_sec i cisza >= silence_sec (naturalny koniec zdania),
+    2. czas >= long_sec i cisza >= long_silence_sec (dłuższy blok, krótsza pauza),
+    3. czas >= max_sec (wymuszone cięcie, z nakładką overlap_sec na następny blok),
+    4. czas >= pause_flush_sec przy automatycznej pauzie nagrywania."""
+    min_sec: float
+    silence_sec: float
+    long_sec: float
+    long_silence_sec: float
+    max_sec: float
+    overlap_sec: float
+    pause_flush_sec: float = 2.0
+    min_emit_sec: float = 1.5     # krótsze fragmenty nigdy nie są zamykane jako blok
+
+
+_BLOCK_PROFILE_DEFAULTS = {
+    "parakeet": {"min_sec": 3.0, "silence_sec": 0.35, "long_sec": 6.0, "long_silence_sec": 0.2,
+                 "max_sec": 8.0, "overlap_sec": 0.5},
+    "whisper": {"min_sec": 20.0, "silence_sec": 0.4, "long_sec": 24.0, "long_silence_sec": 0.25,
+                "max_sec": 28.0, "overlap_sec": 0.5},
+}
+
+
+def get_block_profile(engine_id: str = "") -> BlockProfile:
+    """
+    Zwraca profil cięcia bloków dla silnika (domyślnie aktywnego). Każdą wartość można nadpisać w .env,
+    np. PARAKEET_BLOCK_MAX_SEC=10 albo WHISPER_BLOCK_SILENCE_SEC=0.5.
+    """
+    engine_id = (engine_id or get_asr_engine()).strip().lower()
+    if engine_id not in _BLOCK_PROFILE_DEFAULTS:
+        engine_id = "whisper"
+    values = dict(_BLOCK_PROFILE_DEFAULTS[engine_id])
+    for key in list(values):
+        raw = get_env_variable(f"{engine_id.upper()}_BLOCK_{key.upper()}", "")
+        if raw:
+            try:
+                values[key] = float(raw)
+            except ValueError:
+                pass
+    return BlockProfile(**values)
 
 
 import json
