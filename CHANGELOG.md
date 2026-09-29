@@ -1,3 +1,16 @@
+## [Unreleased]: Silnik Parakeet, usunięcie torch/PyQt6/diaryzacji
+
+- Nowy silnik NVIDIA Parakeet TDT 0.6B v3 (onnx-asr, onnxruntime CPU int8) obok Whispera; wspólny interfejs `AsrEngine`.
+- Wybór silnika i liczby wątków (2–4) w ustawieniach; bez CUDA domyślnie Parakeet.
+- Profile cięcia bloków per silnik (konfigurowalne), nakładka przy wymuszonym cięciu z usuwaniem duplikatów słów.
+- Tabela autokorekt „błędnie → poprawnie”; krótki naturalny prompt polski dla Whispera.
+- Silero VAD na onnxruntime (bez torch); sprawdzanie CUDA przez ctranslate2.
+- Usunięto diaryzację (pyannote, UI, ustawienia), torch, torchaudio i PyQt6.
+- Komunikaty pobierania modelu w UI, opcja lokalnego folderu z modelem; build EXE bez torch z weryfikacją paczki.
+- `scripts/bench_asr.py`: pomiar czasu bloków, RTF, CPU i RAM dla obu silników.
+
+---
+
 ## [v0.7.3] - 2026-09-29: Przywrócenie Najwyższej Jakości Transkrypcji i Stabilności CPU (Hotfix)
 
 ### Wprowadzone zmiany:

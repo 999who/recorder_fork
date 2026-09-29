@@ -21,7 +21,7 @@ flowchart TD
         ROLLING_Q --> HW_DETECT["Detektor Sprzętowy: AMD Ryzen AI / NVIDIA CUDA / CPU"]
         HW_DETECT -->|AMD Ryzen AI / x86| CPU_THR["Multi-thread OpenMP (6 wątków roboczych, AVX2/AVX-512)"]
         HW_DETECT -->|NVIDIA GPU| CUDA["CUDA float16"]
-        CPU_THR --> WHISPER["Faster-Whisper large-v3-turbo (Beam Search beam_size=5)"]
+        CPU_THR --> WHISPER["Silnik ASR: Parakeet TDT (onnx-asr) lub Faster-Whisper"]
         CUDA --> WHISPER
     end
 
@@ -55,3 +55,8 @@ flowchart TD
 
 ### E. Interfejs i Buforowanie Renderowania HTML
 - Odświeżanie podglądu transkrypcji buforowane do **1.5 sekundy**, co zapobiega zacinaniu pętli zdarzeń Qt i minimalizuje narzut na procesor.
+
+
+## Silniki ASR
+
+Rolling Transcriber korzysta z interfejsu `AsrEngine` (`recorder/core/asr_engine.py`): `ParakeetEngine` (onnx-asr, onnxruntime CPU int8, koszt proporcjonalny do długości audio) i `WhisperEngine` (faster-whisper, stałe okno 30 s). Długość bloków, progi pauzy i nakładka wymuszonego cięcia pochodzą z `BlockProfile` per silnik (`recorder/core/blocks.py`, `recorder/config.py`). Wnioski o wydajności: `python scripts/bench_asr.py nagranie.wav`.

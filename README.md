@@ -11,9 +11,9 @@ Szczegółowy opis założeń architektonicznych, pamięci projektu oraz statusu
 
 * 🎙️ **Detekcja Aktywności Głosu (Silero VAD AI):** Wykrywanie mowy w czasie rzeczywistym, bufor pre-padding (brak ucinania pierwszych głosek), konfigurowalny czas auto-pauzy oraz auto-wznawianie.
 * 🎧 **Nagrywanie Hybrydowe (Mikrofon + Dźwięk Systemu / WASAPI Loopback):** Niezależne lub jednoczesne rejestrowanie mowy z mikrofonu oraz dźwięku spotkań online (Discord, Teams, Zoom) z możliwością izolacji wybranego procesu audio oraz szybkimi przyciskami wyciszenia MUTE.
-* ⚡ **Transkrypcja na Żywo w Tle (Rolling Transcriber):** Ciągłe przetwarzanie wypowiedzi w tle za pomocą `faster-whisper` (modele `small`, `medium`, `large-v3-turbo`) z akceleracją GPU (CUDA float16) lub CPU (int8).
+* ⚡ **Transkrypcja na Żywo w Tle (Rolling Transcriber):** Wybór silnika w ustawieniach: **NVIDIA Parakeet TDT 0.6B v3** (`onnx-asr`, onnxruntime, CPU int8 — domyślny bez karty CUDA) lub `faster-whisper` (`small`, `medium`, `large-v3-turbo`; CUDA float16 lub CPU int8). Każdy silnik ma własne parametry cięcia bloków (Parakeet ok. 3–8 s, Whisper 20–28 s), liczbę wątków onnxruntime (2–4) ustawia się w ustawieniach.
+* ✏️ **Autokorekta (tabela „błędnie → poprawnie”):** Słownik użytkownika dla Parakeet działa jako tabela zamian po rozpoznaniu; Whisper nadal korzysta z promptu początkowego.
 * 🛡️ **Zaawansowane Filtry Anty-Halucynacyjne:** Algorytmiczne usuwanie patologicznych pętli powtórzeń (1-gramów i 2-gramów, np. zacięć śmiechu, oddechów czy wielokrotnych powtórzeń), z zachowaniem pełnej treści wartościowych zdań.
-* 👥 **Separacja i Autosugestia Mówców:** Opcjonalna diaryzacja `pyannote.audio` (`speaker-diarization-3.1`) z panelem autosugestii imion na podstawie kontekstu rozmów.
 * 🔔 **Inteligentne Ostrzeganie o Braku Dźwięku:** Dyskretny baner w stylu Windows 11 Fluent z szybkimi akcjami (*«Wszystko gra»* / *«Sprawdź dźwięk»*) oraz automatycznym przekazywaniem do Centrum Akcji Windows z priorytetem alarmu (przebijającym tryb *Nie przeszkadzać*) po 45s nieobecności.
 * 🪟 **Natywna Integracja z Windows & Tray:** Tożsamość procesu `InteligentnyDyktafonAI`, dedykowana ikona Fluent, dynamiczny zasobnik systemowy (Tray) z menu podręcznym i przywracaniem okna lewym klikiem.
 * ☁️ **Agnostyczna Synchronizacja Chmurowa (Cloud Sync):** Transmisja segmentów transkrypcji na żywo do bazy Supabase / REST API / Webhooka CRM z trwałymi identyfikatorami UUID, buforem ponawiania prób bez utraty danych, bezkonfliktowym scalaniem i kolejką offline.
@@ -49,8 +49,12 @@ copy .env.example .env
 
 W pliku `.env`:
 ```env
-# Hugging Face Token (wymagany tylko do diaryzacji PyAnnote)
-HF_TOKEN=hf_twoj_token_tutaj
+# Silnik rozpoznawania mowy: auto | parakeet | whisper (auto = Parakeet bez CUDA)
+ASR_ENGINE=auto
+# Liczba wątków onnxruntime (2-4)
+ONNX_THREADS=3
+# Opcjonalnie: lokalny folder z modelem Parakeet (encoder-model.int8.onnx, decoder_joint-model.int8.onnx, vocab.txt)
+# PARAKEET_MODEL_PATH=C:\modele\parakeet
 
 # Konfiguracja synchronizacji chmurowej (Supabase / CRM)
 SYNC_TARGET=emanager
@@ -89,7 +93,7 @@ recorder67/
 ├── main.py                     # Główny punkt startowy aplikacji
 ├── .env.example                # Przykładowy szablon konfiguracji środowiska
 ├── PROJECT_GOAL.md             # Pamięć projektu, roadmapa i architektura
-├── requirements.txt            # Zależności Python (PySide6, faster-whisper, torch, torchaudio, itp.)
+├── requirements.txt            # Zależności Python (PySide6, onnx-asr, onnxruntime, faster-whisper, itp.; bez torch)
 ├── InteligentnyDyktafonAI.spec # Specyfikacja kompilacji PyInstaller
 ├── build_exe.ps1               # Skrypt automatycznego budowania EXE
 │
@@ -97,10 +101,13 @@ recorder67/
     ├── config.py               # Centralna konfiguracja, stałe i ustawienia użytkownika
     │
     ├── core/                   # Logika przetwarzania audio i modeli AI
-    │   ├── vad.py              # Detektor aktywności głosu Silero VAD
+    │   ├── vad.py              # Detektor aktywności głosu Silero VAD (onnxruntime)
+    │   ├── asr_engine.py       # Wspólny interfejs silników ASR i fabryka
+    │   ├── parakeet_engine.py  # Silnik Parakeet TDT (onnx-asr)
+    │   ├── blocks.py           # Reguła cięcia bloków wg profilu silnika, nakładka i deduplikacja
+    │   ├── replacements.py     # Tabela autokorekt „błędnie → poprawnie”
     │   ├── transcriber.py      # Silnik Faster-Whisper, filtry halucynacji i deduplikacja
     │   ├── rolling_transcriber.py # Asynchroniczny transkryber blokowy na żywo
-    │   ├── diarizer.py         # Silnik diaryzacji PyAnnote (Speaker Diarization)
     │   ├── speakers.py         # Analiza dialogów i autosugestia imion mówców
     │   ├── session.py          # Zarządzanie strukturą i zapisem sesji JSON/TXT
     │   ├── cloud_sync.py       # Asynchroniczna synchronizacja chmurowa i kolejka offline

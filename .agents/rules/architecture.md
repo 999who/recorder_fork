@@ -16,7 +16,6 @@ graph TD
     E -->|Transkrypcja Faster-Whisper| F[recorder/core/filters.py]
     F -->|Czyste turns & words| G[recorder/core/session.py]
     G -->|format_turn_timestamp| H[recorder/ui/window.py]
-    G -->|PyAnnote 3.1 word alignment| I[recorder/core/diarizer.py]
     I -->|Aktualizacja mówców| G
     G -->|JSON & TXT na dysk| J[(Dysk: recordings/ & transcriptions/)]
     G -->|Live / Batch Sync| K[recorder/core/cloud_sync.py]
@@ -29,7 +28,7 @@ graph TD
 
 ### ⏱️ REGUŁA 1: Formatowanie i Obieg Znaczników Czasu (Timestamp Contract)
 1. **Pojedyncze źródło prawdy formatowania:**
-   - Wszystkie moduły (`session.py`, `rolling_transcriber.py`, `diarizer.py`, `speakers.py`, `window.py`) **MUSZĄ** używać funkcji `format_turn_timestamp(st, en, session_start_time)` z `recorder.core.session`.
+   - Wszystkie moduły (`session.py`, `rolling_transcriber.py`, `speakers.py`, `window.py`) **MUSZĄ** używać funkcji `format_turn_timestamp(st, en, session_start_time)` z `recorder.core.session`.
    - **ZAKAZ** wprowadzania sztywnych formatów typu `f"[{st:.1f}s - {en:.1f}s]"` lub samego `f"[{s_min}:{s_sec}]"`.
 2. **Obsługiwane formaty użytkownika (`timestamp_format`):**
    - `"clock_only"` -> `[15:43:54 - 15:44:01]` (wyliczana jako `session_start_time + timedelta(seconds=offset)`).
@@ -46,18 +45,14 @@ graph TD
    - W `recorder/ui/workers.py` **NIGDY** nie twórz osobnych instancji `sounddevice` i `pyaudiowpatch` w tym samym procesie (powoduje to crash `0xC0000374` PortAudio DLL heap corruption).
    - Obydwa strumienie (`mic_stream` i `loop_stream`) muszą korzystać z tej samej instancji `pyaudiowpatch` (`self.p_audio`).
 2. **Blokada Silero VAD:**
-   - W `recorder/core/vad.py` inferencja Torch JIT `_silero_model` **MUSI** być otoczona blokadą `with _silero_lock:` (jednoczesne wywołanie z wątku mikrofonu i wątku loopback powoduje access violation `0xC0000005`).
+   - W `recorder/core/vad.py` inferencja ONNX `_silero_session` (onnxruntime, bez torch) **MUSI** być otoczona blokadą `with _silero_lock:` (jednoczesne wywołanie z wątku mikrofonu i wątku loopback powoduje access violation `0xC0000005`).
 
 ---
 
-### 👥 REGUŁA 3: Diaryzacja PyAnnote 3.1
-1. **Autoryzacja HuggingFace:**
-   - Używaj `Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=token)`.
-2. **Parametry wywołania:**
-   - **NIE** przekazuj `batch_size` do `pipeline(audio_path)` (PyAnnote 3.1 tego nie obsługuje i rzuca `TypeError`).
-   - Wydajnością steruj wyłącznie przez `torch.set_num_threads(safe_threads)`.
-3. **Zatwierdzanie imion mówców:**
-   - W `_on_apply_speakers_clicked()` zawsze przekazuj `session_start_time` do `format_turns()` i aktualizuj mapowanie w pliku `session.json`.
+### 🧠 REGUŁA 3: Silniki ASR
+1. Rolling transcriber korzysta wyłącznie z interfejsu `AsrEngine` (`recorder/core/asr_engine.py`, `create_asr_engine`); nie wywołuj modelu bezpośrednio.
+2. Parametry cięcia bloków pochodzą z `BlockProfile` (`recorder.config.get_block_profile`), nie z liczb zaszytych w `workers.py`.
+3. Wnioski o wydajności opieraj na wyniku `scripts/bench_asr.py`, nie na szacunkach.
 
 ---
 
@@ -83,9 +78,9 @@ graph TD
 3. **Samouczenie Agenta:**
    - Asystent ma stałą zgodę na proaktywne aktualizowanie ustaleń technicznych i zasad bezpośrednio w tym pliku `.agents/rules/architecture.md`.
 4. **Sprzęt i Optymalizacje Audio w Windows:**
-   - **Hollyland LARK MAX 2:** Odbiornik po USB w Windows sumuje sygnał do mono/stereo (nie ma 4 fizycznych urządzeń wejściowych) – w 100% polegamy na programowej diaryzacji `pyannote.audio` + panelu autosugestii w UI.
+   - **Hollyland LARK MAX 2:** Odbiornik po USB w Windows sumuje sygnał do mono/stereo (nie ma 4 fizycznych urządzeń wejściowych) – diaryzacja została usunięta z projektu (brak pyannote/torch).
    - Unikać zależności od zewnętrznego systemowego `ffmpeg` – stosować wbudowane mechanizmy `soundfile` do bezpośredniego wczytywania tablic float32 do `faster-whisper`.
-   - Stosować `apply_av_patches()` oraz `apply_torchaudio_patches()` omijające błędy DLL i ograniczenia PyTorch 2.6+ `weights_only`.
+   - Stosować `apply_av_patches()` (omija błędy DLL PyAV). Projekt nie używa torch/torchaudio ani PyQt6 — nie dodawaj ich z powrotem.
 
 ---
 
@@ -103,7 +98,7 @@ graph TD
 Przed zakończeniem dowolnego zadania programistycznego w tym projekcie upewnij się, że:
 - [ ] Zmiana nie zaburzyła formatowania timestampów w 4 kluczowych punktach:
   1. Live transcription podczas nagrywania.
-  2. Wynik po diaryzacji PyAnnote.
+  2. Wynik transkrypcji pliku (TranscriptionWorker / FileProcessingWorker).
   3. Kliknięcie *„Zastosuj imiona mówców i zapisz”*.
   4. Dwukrotne kliknięcie na liście zapisanych plików w UI.
 - [ ] Nie zmieniono pojedynczej instancji `pyaudiowpatch` na osobne biblioteki audio.

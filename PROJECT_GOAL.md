@@ -7,8 +7,8 @@
 ## 1. Główny Cel Projektu (Objective)
 Budowa systemu **Ambient AI** dla biura, który w sposób ciągły, inteligentny i zoptymalizowany pod kątem zasobów:
 1. Rejestruje mowę z mikrofonów w biurze (z automatycznym pomijaniem ciszy przez Silero VAD i natychmiastowym strumieniowaniem WAV na dysk).
-2. Transkrybuje mowę na żywo w tle (asynchroniczny Rolling Transcriber oparty na `faster-whisper` z buforem mowy, deduplikacją słów i filtrami anty-halucynacyjnymi).
-3. Opcjonalnie separuje mówców (diaryzacja PyAnnote + autosugestia imion na podstawie kontekstu rozmów).
+2. Transkrybuje mowę na żywo w tle (asynchroniczny Rolling Transcriber z wymiennym silnikiem: Parakeet TDT 0.6B v3 przez `onnx-asr` lub `faster-whisper`, z buforem mowy, deduplikacją słów i filtrami anty-halucynacyjnymi).
+3. (Diaryzacja została usunięta — CRM dostaje jednego mówcę „Mówca”.)
 4. Przesyła dane na żywo (Live Streaming) do bazy danych Supabase / REST API / CRM z odpornością na brak internetu (kolejka offline).
 5. Zasila moduł **Asystenta AI Biura w systemie CRM**, który na bieżąco generuje:
    - Podgląd transkrypcji na żywo z podziałem na role i sygnaturami czasowymi.
@@ -27,7 +27,6 @@ graph TD
     B -->|StreamingWavWriter| D[Strumieniowy zapis WAV na dysk]
     B -->|Rolling Transcriber| E[Faster-Whisper na żywo w tle]
     E -->|Filtry 1-gram / 2-gram| F[Deduplikacja i ochrona zdań]
-    F -->|Opcjonalnie PyAnnote| G[Diaryzacja i autosugestia mówców]
     F -->|CloudSyncManager| H[Asynchroniczny Ingest na żywo]
     H -->|Brak sieci| I[(Lokalna kolejka offline)]
     H -->|Połączenie online| J[(Baza Danych Supabase / REST API)]
@@ -59,9 +58,8 @@ graph TD
 - [x] **Integracja Chmurowa i CRM (Cloud Sync)**:
   - Asynchroniczny przesył segmentów na żywo do Supabase / Webhooka z trwałymi identyfikatorami UUID, buforem ponawiania prób bez utraty danych i bezwzględną deduplikacją O(1).
   - Obsługa kolejki offline z automatycznym dosłaniem danych po powrocie internetu.
-- [x] **Separacja i Autosugestia Mówców (Diarization)**:
-  - Integracja z `pyannote.audio` (model `speaker-diarization-3.1`) z możliwością uruchomienia wyłącznie diaryzacji na gotowych słowach sesji JSON bez ponownego uruchamiania Whispera.
-  - Panel autosugestii imion na podstawie kontekstu wypowiedzi.
+- [x] **Silnik Parakeet (onnx-asr, CPU int8)**: wspólny interfejs `AsrEngine`, profile cięcia bloków per silnik, tabela autokorekt, brak zależności od torch; `scripts/bench_asr.py` mierzy czas, RTF, CPU i RAM obu silników.
+- [x] ~~Diaryzacja PyAnnote~~ — usunięta razem z torch.
 - [x] **Kontrola Prywatności w GUI (Manual Pause / Stop)**: Dedykowane przyciski *„Wstrzymaj Ręcznie”* oraz *„Stop i Zapisz”* pozwalające na natychmiastowe zatrzymanie nasłuchu mikrofonu i transmisji danych w dowolnym momencie.
 - [x] **Wgrywanie Gotowych Plików Audio/Wideo**: Obsługa formatów WAV, MP3, M4A, FLAC, OGG, AAC, MP4, MKV z normalizacją 16kHz mono i natychmiastowym autozapisem TXT/JSON.
 - [x] **Hybrydowe Źródła Audio (Mikrofon + WASAPI Loopback)**: Niezależne lub równoległe rejestrowanie mikrofonu oraz dźwięku systemu/spotkań (Discord, MS Teams, Zoom), izolacja procesu audio (`TargetAppAudioMonitor`), suwaki VU i niezależne przyciski wyciszenia MUTE w locie.
