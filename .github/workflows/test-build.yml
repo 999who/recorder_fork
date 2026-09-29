@@ -1,0 +1,60 @@
+name: Test Build (Parakeet, nowy wygląd)
+
+# Wersja testowa do wypróbowania zmian z gałęzi, bez publikowania wydania.
+on:
+  push:
+    branches:
+      - 'feat/ui-dark-notebook'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build Windows test EXE
+    runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: 'utf-8'
+      PYTHONUTF8: '1'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Executable with PyInstaller
+        run: |
+          python scripts/build_exe.py --variant parakeet-test
+
+      - name: Check Qt SVG plugin
+        shell: pwsh
+        run: |
+          $svg = Get-ChildItem -Recurse "dist/InteligentnyDyktafonAI-ParakeetTest" -Filter "qsvg*.dll" -ErrorAction SilentlyContinue
+          if ($svg) { Write-Host "qsvg: $($svg[0].FullName)" } else { Write-Host "::warning::Brak wtyczki qsvg - strzałki list i ptaszki pól wyboru mogą się nie wyświetlać" }
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InteligentnyDyktafonAI-ParakeetTest-Windows
+          path: dist/InteligentnyDyktafonAI-ParakeetTest
+          if-no-files-found: error
+
+      - name: Upload Build Log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build_log
+          path: build_log.txt
+          if-no-files-found: ignore
