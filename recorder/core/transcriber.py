@@ -350,6 +350,11 @@ class WhisperEngine(AsrEngine):
                             "end": w_start + w_dur,
                             "probability": 0.9,
                         })
+
+        from recorder.config import is_replacements_for_whisper
+        if is_replacements_for_whisper():
+            from recorder.core.replacements import apply_word_replacements
+            words = apply_word_replacements(words)
         return words
 
     def transcribe_live_chunk(self, audio_float: np.ndarray, language: str = "pl", context_prompt: str = "", beam_size: Optional[int] = None) -> str:

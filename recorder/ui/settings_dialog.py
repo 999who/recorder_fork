@@ -6,11 +6,13 @@ from PySide6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTabWidget, QWidget, QTextEdit, QTextBrowser, QComboBox,
     QSlider, QSpinBox, QCheckBox, QGroupBox, QFormLayout,
-    QMessageBox, QFrame, QSizePolicy, QProgressBar, QScrollArea, QFileDialog
+    QMessageBox, QFrame, QSizePolicy, QProgressBar, QScrollArea, QFileDialog,
+    QTableWidget, QTableWidgetItem, QHeaderView
 )
 from PySide6.QtCore import Qt, Signal as pyqtSignal, QUrl
 from PySide6.QtGui import QFont, QIcon, QDesktopServices
 
+from recorder.core.replacements import normalize_pairs
 from recorder.config import (
     load_user_settings,
     save_user_settings,
@@ -194,6 +196,39 @@ class SettingsDialog(QDialog):
         preset_layout.addStretch()
         dict_layout.addLayout(preset_layout)
         layout.addWidget(box_dict)
+
+        # Sekcja: Autokorekty (zastępują initial_prompt w Parakeet)
+        box_repl = QGroupBox("✏️ Autokorekta: błędnie → poprawnie")
+        repl_layout = QVBoxLayout(box_repl)
+        lbl_repl = QLabel(
+            "Parakeet nie przyjmuje promptu ze słownikiem, dlatego popularne przekręcenia nazw poprawiamy po rozpoznaniu. "
+            "Zamiana dotyczy całych słów i fraz, bez rozróżniania wielkości liter."
+        )
+        lbl_repl.setWordWrap(True)
+        lbl_repl.setObjectName("LblSettingDesc")
+        repl_layout.addWidget(lbl_repl)
+
+        self.table_replacements = QTableWidget(0, 2)
+        self.table_replacements.setHorizontalHeaderLabels(["Błędnie", "Poprawnie"])
+        self.table_replacements.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table_replacements.setMinimumHeight(110)
+        repl_layout.addWidget(self.table_replacements)
+
+        repl_btns = QHBoxLayout()
+        btn_repl_add = QPushButton("+ Dodaj wiersz")
+        btn_repl_add.setObjectName("BtnPreset")
+        btn_repl_add.clicked.connect(lambda: self._add_replacement_row("", ""))
+        repl_btns.addWidget(btn_repl_add)
+        btn_repl_del = QPushButton("Usuń zaznaczony")
+        btn_repl_del.setObjectName("BtnDanger")
+        btn_repl_del.clicked.connect(self._remove_replacement_row)
+        repl_btns.addWidget(btn_repl_del)
+        repl_btns.addStretch()
+        repl_layout.addLayout(repl_btns)
+
+        self.chk_repl_whisper = QCheckBox("Stosuj autokorekty także dla Whispera")
+        repl_layout.addWidget(self.chk_repl_whisper)
+        layout.addWidget(box_repl)
 
         # Sekcja: Silnik rozpoznawania mowy (Parakeet / Whisper)
         box_engine = QGroupBox("🧠 Silnik Rozpoznawania Mowy")
@@ -457,6 +492,27 @@ class SettingsDialog(QDialog):
             self.txt_keywords.setPlainText(f"{cur} {preset_text}")
         else:
             self.txt_keywords.setPlainText(preset_text)
+
+    def _add_replacement_row(self, wrong: str, right: str):
+        row = self.table_replacements.rowCount()
+        self.table_replacements.insertRow(row)
+        self.table_replacements.setItem(row, 0, QTableWidgetItem(wrong))
+        self.table_replacements.setItem(row, 1, QTableWidgetItem(right))
+
+    def _remove_replacement_row(self):
+        for idx in sorted({i.row() for i in self.table_replacements.selectedIndexes()}, reverse=True):
+            self.table_replacements.removeRow(idx)
+
+    def _collect_replacements(self) -> list:
+        pairs = []
+        for r in range(self.table_replacements.rowCount()):
+            a = self.table_replacements.item(r, 0)
+            b = self.table_replacements.item(r, 1)
+            wrong = a.text().strip() if a else ""
+            right = b.text().strip() if b else ""
+            if wrong and right:
+                pairs.append([wrong, right])
+        return pairs
 
     def _on_choose_parakeet_path(self):
         """Wybór lokalnego folderu z modelem Parakeet."""
@@ -926,6 +982,10 @@ class SettingsDialog(QDialog):
         t_idx0 = self.combo_onnx_threads.findData(max(2, min(4, int(st.get("onnx_threads", 3)))))
         self.combo_onnx_threads.setCurrentIndex(t_idx0 if t_idx0 != -1 else 1)
         self.txt_parakeet_path.setText(str(st.get("parakeet_model_path", "")))
+        self.table_replacements.setRowCount(0)
+        for wrong, right in normalize_pairs(st.get("custom_replacements", [])):
+            self._add_replacement_row(wrong, right)
+        self.chk_repl_whisper.setChecked(bool(st.get("replacements_for_whisper", False)))
 
         # Źródło Audio & VAD
         src_mode = st.get("record_source_mode", RecordSourceMode.HYBRID_DUAL)
@@ -1069,6 +1129,8 @@ class SettingsDialog(QDialog):
             "asr_engine": self.combo_engine.currentData() or "",
             "onnx_threads": int(self.combo_onnx_threads.currentData() or 3),
             "parakeet_model_path": self.txt_parakeet_path.text().strip(),
+            "custom_replacements": self._collect_replacements(),
+            "replacements_for_whisper": self.chk_repl_whisper.isChecked(),
             "hf_token": self.txt_hf_token.text().strip(),
             "record_source_mode": self.combo_default_source_mode.currentData() or RecordSourceMode.HYBRID_DUAL,
             "vad_speech_threshold": round(self.slider_vad.value() / 100.0, 2),

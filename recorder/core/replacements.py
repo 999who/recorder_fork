@@ -78,5 +78,5 @@ def apply_word_replacements(words: List[Dict[str, Any]], pairs: Optional[Sequenc
 
 def load_configured_pairs() -> List[Pair]:
     """Pary z user_settings.json (klucz custom_replacements)."""
-    from recorder.config import load_user_settings
-    return normalize_pairs(load_user_settings().get("custom_replacements", []))
+    from recorder.config import get_custom_replacements
+    return get_custom_replacements()

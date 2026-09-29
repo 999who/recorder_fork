@@ -244,6 +244,8 @@ def load_user_settings(force_reload: bool = False) -> dict:
         "asr_engine": get_env_variable("ASR_ENGINE", ""),  # "" = automatycznie (Parakeet bez CUDA, Whisper z CUDA)
         "onnx_threads": int(get_env_variable("ONNX_THREADS", "3")),
         "parakeet_model_path": get_env_variable("PARAKEET_MODEL_PATH", ""),
+        "custom_replacements": [],            # lista par [błędnie, poprawnie] stosowana po rozpoznaniu
+        "replacements_for_whisper": False,    # autokorekty domyślnie tylko dla Parakeet (Whisper ma initial_prompt)
         "theme": get_env_variable("APP_THEME", "classic_dark"),
         "font_size": int(get_env_variable("TRANSCRIPT_FONT_SIZE", "13")),
         "always_on_top": get_env_variable("ALWAYS_ON_TOP", "false").lower() in ("1", "true", "yes"),
@@ -317,6 +319,17 @@ def is_adaptive_beam_size() -> bool:
     """Zwraca czy adaptacyjny dobór beam_size (bieg turbo przy zatorach w kolejce) jest włączony."""
     st = load_user_settings()
     return bool(st.get("adaptive_beam_size", False))
+
+
+def get_custom_replacements() -> list:
+    """Zwraca listę autokorekt jako pary (błędnie, poprawnie)."""
+    from recorder.core.replacements import normalize_pairs
+    return normalize_pairs(load_user_settings().get("custom_replacements", []))
+
+
+def is_replacements_for_whisper() -> bool:
+    """Czy autokorekty mają działać także po rozpoznaniu Whisperem."""
+    return bool(load_user_settings().get("replacements_for_whisper", False))
 
 
 def get_asr_engine() -> str:
@@ -501,13 +514,9 @@ def get_default_beam_size() -> int:
 
 DEFAULT_BEAM_SIZE = get_beam_size()
 
-# Domyślny słownik początkowy dla Whispera (emanager.pro, CRM z AI, automatyzacje n8n, biznes, architektura)
-DEFAULT_INITIAL_PROMPT = (
-    "emanager.pro, EMANAGER.PRO, CRM, AI, Supabase, n8n, Make, webhook, API, LLM, GPT-4, Claude, Gemini, "
-    "Gemini Vision, Lovable, React, Helpdesk, Subiekt GT, Subiekt, faktura proforma, zamówienia, zgłoszenia, "
-    "harmonogram, kategorie, dyplomy, matryca uprawnień, recepcja, check-in, QR code, CSV, oświetleniowiec, "
-    "synchronizacja, rejestr zmian, diaryzacja, transkrypcja, procesy biznesowe, architektura wzrostu."
-)
+# Domyślny prompt początkowy Whispera: jedno krótkie, naturalne zdanie po polsku.
+# Długa lista angielskiego żargonu skłaniała małe modele do wstawiania tych słów tam, gdzie ich nie było.
+DEFAULT_INITIAL_PROMPT = "Rozmowa w biurze po polsku o klientach, zamówieniach i fakturach."
 
 
 def get_full_initial_prompt(extra_context: str = "") -> str:
@@ -518,7 +527,7 @@ def get_full_initial_prompt(extra_context: str = "") -> str:
     kw = get_custom_keywords()
     prompt = DEFAULT_INITIAL_PROMPT
     if kw:
-        prompt = f"{prompt}, {kw}"
+        prompt = f"{prompt} {kw}"
     if extra_context and len(extra_context.strip()) > 3:
         prompt = f"{prompt} {extra_context.strip()[-150:]}"
     return prompt
