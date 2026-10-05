@@ -1289,7 +1289,7 @@ class SettingsDialog(QDialog):
         else:
             self.combo_silence_alert.setCurrentIndex(self.combo_silence_alert.findData(5.0))
 
-        ts_fmt = st.get("timestamp_format", "offset_only")
+        ts_fmt = st.get("timestamp_format", "clock_only")
         ts_idx = self.combo_timestamp_format.findData(ts_fmt)
         if ts_idx != -1:
             self.combo_timestamp_format.setCurrentIndex(ts_idx)
@@ -1420,7 +1420,7 @@ class SettingsDialog(QDialog):
             "auto_pause_sec": float(self.slider_auto_pause.value()),
             "session_split_silence_sec": float(self.combo_session_split.currentData() or 900.0),
             "silence_alert_minutes": float(self.combo_silence_alert.currentData() if self.combo_silence_alert.currentData() is not None else 5.0),
-            "timestamp_format": self.combo_timestamp_format.currentData() or "offset_only",
+            "timestamp_format": self.combo_timestamp_format.currentData() or "clock_only",
             "preview_order": self.combo_preview_order.currentData() or "newest_first",
             "auto_scroll_chronological": self.chk_auto_scroll.isChecked(),
             "device_name": self.txt_device_name.text().strip() or "Biuro-Stanowisko-1",

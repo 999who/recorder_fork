@@ -416,8 +416,8 @@ def test_real_wall_clock_timestamp_with_mute():
     lbl2 = format_turn_timestamp(st2, en2, session_start_time=session_start, ts_format="clock_only",
                                  wall_start=t2_wall, wall_end=t2_wall + timedelta(seconds=5.0))
 
-    assert lbl1 == "18:00:00 - 18:00:05"
-    assert lbl2 == "18:15:00 - 18:15:05", f"Oczekiwano rzeczywistej godziny 18:15:00, otrzymano: {lbl2}"
+    assert lbl1 == "18:00:00"
+    assert lbl2 == "18:15:00", f"Oczekiwano rzeczywistej godziny 18:15:00, otrzymano: {lbl2}"
 
     # Weryfikacja dla trybu hybrydowego: offset + realna godzina (np. 00:05 - 00:10 | 18:15:00 - 18:15:05)
     lbl1_hybrid = format_turn_timestamp(st1, en1, session_start_time=session_start, ts_format="hybrid",

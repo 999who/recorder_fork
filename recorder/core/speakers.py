@@ -380,6 +380,7 @@ def parse_txt_to_turns(txt_content: str, session_start_time: Optional[datetime] 
     Obsługuje formaty:
     - [19.5s - 20.6s] SPEAKER_02: Treść wypowiedzi
     - [00:19 - 00:20] Jan: Treść wypowiedzi
+    - [15:43:54] Jan: Treść wypowiedzi
     - [15:43:54 - 15:44:01] Jan: Treść wypowiedzi
     - [00:19 - 00:20 | 15:43:54 - 15:44:01] Jan: Treść wypowiedzi
     - SPEAKER_02: Treść wypowiedzi
@@ -390,6 +391,7 @@ def parse_txt_to_turns(txt_content: str, session_start_time: Optional[datetime] 
 
     pattern_hybrid = re.compile(r'^\s*\[(\d+):(\d+)\s*-\s*(\d+):(\d+)\s*\|\s*(\d{1,2}):(\d{2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2}):(\d{2})\]\s*([^:]+):\s*(.*)$')
     pattern_clock = re.compile(r'^\s*\[(\d{1,2}):(\d{2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2}):(\d{2})\]\s*([^:]+):\s*(.*)$')
+    pattern_clock_start = re.compile(r'^\s*\[(\d{1,2}):(\d{2}):(\d{2})\]\s*([^:]+):\s*(.*)$')
     pattern_sec = re.compile(r'^\s*\[([\d\.]+)\s*s?\s*-\s*([\d\.]+)\s*s?\]\s*([^:]+):\s*(.*)$')
     pattern_min = re.compile(r'^\s*\[(\d+):(\d+)\s*-\s*(\d+):(\d+)\]\s*([^:]+):\s*(.*)$')
     pattern_simple = re.compile(r'^\s*([^:\[\n]+):\s*(.*)$')
@@ -436,6 +438,24 @@ def parse_txt_to_turns(txt_content: str, session_start_time: Optional[datetime] 
 
             speaker = m_clock.group(7).strip()
             text = (m_clock.group(8) + " " + remaining_text).strip()
+            turns.append({"speaker": speaker, "start": start, "end": end, "text": text})
+            current_time = end
+            continue
+
+        # 2b. Format samej godziny startu [15:43:54] Mówca: ...
+        m_cs = pattern_clock_start.match(header_line)
+        if m_cs:
+            c_start = int(m_cs.group(1)) * 3600 + int(m_cs.group(2)) * 60 + int(m_cs.group(3))
+            if session_start_time is not None:
+                base_sec = session_start_time.hour * 3600 + session_start_time.minute * 60 + session_start_time.second
+                start = max(0.0, float(c_start - base_sec))
+            else:
+                if first_clock_sec is None:
+                    first_clock_sec = c_start
+                start = max(0.0, float(c_start - first_clock_sec))
+            end = start + 5.0
+            speaker = m_cs.group(4).strip()
+            text = (m_cs.group(5) + " " + remaining_text).strip()
             turns.append({"speaker": speaker, "start": start, "end": end, "text": text})
             current_time = end
             continue

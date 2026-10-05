@@ -90,6 +90,7 @@ def format_turn_timestamp(st: float, en: float, session_start_time: Optional[dat
 
     w_start_dt = None
     w_end_dt = None
+    clock_start_label = None
     if wall_start is not None and wall_end is not None:
         try:
             w_start_dt = datetime.fromisoformat(wall_start) if isinstance(wall_start, str) else wall_start
@@ -102,6 +103,7 @@ def format_turn_timestamp(st: float, en: float, session_start_time: Optional[dat
         clock_start = w_start_dt.strftime("%H:%M:%S")
         clock_end = w_end_dt.strftime("%H:%M:%S")
         clock_label = f"{clock_start} - {clock_end}"
+        clock_start_label = clock_start
     elif session_start_time is not None:
         from datetime import timedelta
         real_start = session_start_time + timedelta(seconds=st)
@@ -109,11 +111,13 @@ def format_turn_timestamp(st: float, en: float, session_start_time: Optional[dat
         clock_start = real_start.strftime("%H:%M:%S")
         clock_end = real_end.strftime("%H:%M:%S")
         clock_label = f"{clock_start} - {clock_end}"
+        clock_start_label = clock_start
     else:
         clock_label = None
+        clock_start_label = None
 
-    if ts_format == "clock_only" and clock_label:
-        return clock_label
+    if ts_format == "clock_only" and clock_start_label:
+        return clock_start_label
     elif ts_format == "offset_only":
         return offset_label
     elif clock_label:

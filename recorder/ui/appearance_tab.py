@@ -207,9 +207,9 @@ class AppearanceTab(QWidget):
 
         self.combo_timestamp_format = QComboBox()
         self.combo_timestamp_format.setObjectName("combo_timestamp_format")
-        self.combo_timestamp_format.addItem("Tylko offset [00:12 - 00:18] (Domyślne)", "offset_only")
+        self.combo_timestamp_format.addItem("Tylko offset [00:12 - 00:18]", "offset_only")
         self.combo_timestamp_format.addItem("Offset + Godzina realna [00:12 | 13:47:12]", "offset+clock")
-        self.combo_timestamp_format.addItem("Tylko godzina realna [13:47:12 - 13:47:18]", "clock_only")
+        self.combo_timestamp_format.addItem("Godzina startu [13:47:12] (Domyślne)", "clock_only")
         ts_row.addWidget(self.combo_timestamp_format, stretch=1)
         view_layout.addLayout(ts_row)
 
@@ -299,7 +299,7 @@ class AppearanceTab(QWidget):
         self.lbl_font_size_val.setText(f"{self.slider_font_size.value()} px")
 
         # Timestamp format
-        ts_fmt = self._settings.get("timestamp_format", "offset_only")
+        ts_fmt = self._settings.get("timestamp_format", "clock_only")
         idx_ts = self.combo_timestamp_format.findData(ts_fmt)
         if idx_ts >= 0:
             self.combo_timestamp_format.setCurrentIndex(idx_ts)
@@ -322,7 +322,7 @@ class AppearanceTab(QWidget):
             "theme": self._active_theme_id,
             "font_size": self.slider_font_size.value(),
             "transcript_font_size": self.slider_font_size.value(),
-            "timestamp_format": self.combo_timestamp_format.currentData() or "offset_only",
+            "timestamp_format": self.combo_timestamp_format.currentData() or "clock_only",
             "preview_order": self.combo_preview_order.currentData() or "newest_first",
             "auto_scroll_chronological": self.chk_auto_scroll.isChecked(),
             "always_on_top": self.chk_always_on_top.isChecked(),
@@ -335,7 +335,7 @@ class AppearanceTab(QWidget):
             "theme": "classic_dark",
             "font_size": 13,
             "transcript_font_size": 13,
-            "timestamp_format": "offset_only",
+            "timestamp_format": "clock_only",
             "preview_order": "newest_first",
             "auto_scroll_chronological": True,
             "always_on_top": False,

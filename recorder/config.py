@@ -234,7 +234,7 @@ def load_user_settings(force_reload: bool = False) -> dict:
         "auto_pause_sec": float(get_env_variable("AUTO_PAUSE_SEC", "5.0")),
         "session_split_silence_sec": float(get_env_variable("SESSION_SPLIT_SILENCE_SEC", "900.0")),  # 15 min
         "silence_alert_minutes": float(get_env_variable("SILENCE_ALERT_MINUTES", "5.0")),  # 5 min ostrzeżenie strażnika ciszy
-        "timestamp_format": get_env_variable("TIMESTAMP_FORMAT", "offset_only"),
+        "timestamp_format": get_env_variable("TIMESTAMP_FORMAT", "clock_only"),
         "preview_order": get_env_variable("PREVIEW_ORDER", "newest_first"),
         "auto_scroll_chronological": get_env_variable("AUTO_SCROLL_CHRONOLOGICAL", "true").lower() in ("1", "true", "yes"),
         "check_prereleases": True,
@@ -297,7 +297,7 @@ def save_user_settings(settings: dict) -> bool:
 
 def get_timestamp_format() -> str:
     """Zwraca wybrany format znacznika czasu (offset_only / clock_only / hybrid)."""
-    return str(load_user_settings().get("timestamp_format", "offset_only"))
+    return str(load_user_settings().get("timestamp_format", "clock_only"))
 
 
 def get_custom_keywords() -> str:
