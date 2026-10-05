@@ -5,7 +5,7 @@
     <File Path=".gitignore" />
     <File Path="build_exe.bat" />
     <File Path="build_exe.ps1" />
-    <File Path="InteligentnyDyktafonAI.spec" />
+    <File Path="EMANAGER-Signal.spec" />
     <File Path="main.py" />
     <File Path="PROJECT_GOAL.md" />
     <File Path="pytest.ini" />
@@ -21,7 +21,6 @@
   <Folder Name="/Elementy rozwiązania/scripts/">
     <File Path="scripts/build_exe.py" />
     <File Path="scripts/download_fonts.py" />
-    <File Path="scripts/generate_icon.py" />
     <File Path="scripts/verify_theme_benchmarks.py" />
   </Folder>
   <Folder Name="/Elementy rozwiązania/tests/">

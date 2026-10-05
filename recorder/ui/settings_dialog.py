@@ -1153,7 +1153,7 @@ class SettingsDialog(QDialog):
                 self.btn_toggle_history.setVisible(False)
 
             # Sprawdzenie czy paczka aktualizacji jest już pobrana w katalogu tymczasowym
-            expected_zip = os.path.join(tempfile.gettempdir(), f"InteligentnyDyktafonAI_{tag}.zip")
+            expected_zip = os.path.join(tempfile.gettempdir(), f"EMANAGER-Signal_{tag}.zip")
             asset_size = result.get("asset_size", 0)
             if os.path.exists(expected_zip) and (asset_size == 0 or abs(os.path.getsize(expected_zip) - asset_size) < 4096):
                 self._cached_zip_path = expected_zip
@@ -1505,7 +1505,7 @@ class UpdatePromptDialog(QDialog):
     """
     def __init__(self, parent, version: str):
         super().__init__(parent)
-        self.setWindowTitle("Aktualizacja Gotowa - Inteligentny Dyktafon AI")
+        self.setWindowTitle("Aktualizacja Gotowa - EMANAGER Signal")
         self.setMinimumWidth(480)
 
         layout = QVBoxLayout(self)

@@ -199,7 +199,7 @@ def test_system_diagnostics_logging():
 
 def test_build_spec_and_script_configured_for_noconsole():
     print("[TEST] Weryfikacja wyłączenia okna konsoli w plikach budowania EXE...")
-    spec_path = os.path.join(ROOT_DIR, "InteligentnyDyktafonAI.spec")
+    spec_path = os.path.join(ROOT_DIR, "EMANAGER-Signal.spec")
     build_script_path = os.path.join(ROOT_DIR, "scripts", "build_exe.py")
 
     assert os.path.exists(build_script_path), "Brak skryptu build_exe.py!"

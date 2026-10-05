@@ -27,7 +27,7 @@ from recorder.ui.theme import setup_dark_palette, DARK_THEME_QSS
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Inteligentny Dyktafon AI")
+    app.setApplicationName("EMANAGER Signal")
     setup_dark_palette(app)
     app.setStyleSheet(DARK_THEME_QSS)
     window = SmartDictaphoneWindow()

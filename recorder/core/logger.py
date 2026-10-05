@@ -1,5 +1,5 @@
 """
-Moduł centralnego logowania i diagnostyki dla Inteligentnego Dyktafonu AI.
+Moduł centralnego logowania i diagnostyki dla EMANAGER Signal.
 Zapewnia:
 - Zapis logów do rotującego pliku (RotatingFileHandler) w katalogu logs/
 - Bezpieczne przekierowanie sys.stdout i sys.stderr do pliku logu (kluczowe dla exe z --noconsole)
@@ -322,7 +322,7 @@ def log_system_diagnostics(logger: Optional[logging.Logger] = None, force: bool 
     mode_desc = "Skompilowane EXE (PyInstaller)" if is_frozen else "Tryb deweloperski (Python)"
 
     log.info("=" * 70)
-    log.info(f"START APLIKACJI: Inteligentny Dyktafon AI v{APP_VERSION} ({mode_desc})")
+    log.info(f"START APLIKACJI: EMANAGER Signal v{APP_VERSION} ({mode_desc})")
     log.info(f"Repozytorium:   {GITHUB_REPO}")
     log.info(f"System:         {platform.system()} {platform.release()} ({platform.version()})")
     log.info(f"Architektura:   {platform.machine()} / {platform.architecture()[0]}")

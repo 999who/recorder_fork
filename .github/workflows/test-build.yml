@@ -39,14 +39,14 @@ jobs:
       - name: Check Qt SVG plugin
         shell: pwsh
         run: |
-          $svg = Get-ChildItem -Recurse "dist/InteligentnyDyktafonAI-ParakeetTest" -Filter "qsvg*.dll" -ErrorAction SilentlyContinue
+          $svg = Get-ChildItem -Recurse "dist/EMANAGER-Signal-ParakeetTest" -Filter "qsvg*.dll" -ErrorAction SilentlyContinue
           if ($svg) { Write-Host "qsvg: $($svg[0].FullName)" } else { Write-Host "::warning::Brak wtyczki qsvg - strzałki list i ptaszki pól wyboru mogą się nie wyświetlać" }
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InteligentnyDyktafonAI-ParakeetTest-Windows
-          path: dist/InteligentnyDyktafonAI-ParakeetTest
+          name: EMANAGER-Signal-ParakeetTest-Windows
+          path: dist/EMANAGER-Signal-ParakeetTest
           if-no-files-found: error
 
       - name: Upload Build Log

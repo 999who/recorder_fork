@@ -244,7 +244,7 @@ class AppearanceTab(QWidget):
 
         self.chk_always_on_top = QCheckBox("Okno zawsze na wierzchu")
         self.chk_always_on_top.setObjectName("chk_always_on_top")
-        self.chk_always_on_top.setToolTip("Dyktafon pozostaje widoczny nad innymi oknami programu")
+        self.chk_always_on_top.setToolTip("EMANAGER Signal pozostaje widoczny nad innymi oknami programu")
         window_layout.addWidget(self.chk_always_on_top)
 
         self.chk_minimize_to_tray = QCheckBox("Minimalizuj do zasobnika systemowego przy zamykaniu")

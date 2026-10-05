@@ -407,17 +407,6 @@ def test_app_icon_asset_files_integrity():
     assert os.path.getsize(ico_path) > 10000, "app_icon.ico unexpectedly small"
 
 
-def test_app_icon_generator_has_dark_outline():
-    """scripts/generate_icon.py must contain the 12px #0c0e12 under-stroke outline logic."""
-    gen_script = os.path.join(PROJECT_ROOT, "scripts", "generate_icon.py")
-    with open(gen_script, "r", encoding="utf-8") as f:
-        src = f.read()
-
-    assert "#0c0e12" in src, "scripts/generate_icon.py must use dark outline color #0c0e12"
-    assert "12.0" in src or "12" in src, "scripts/generate_icon.py must use 12px outline stroke"
-    assert "pen_outline" in src or "outline" in src.lower()
-
-
 def test_app_icon_contrast_against_pure_white():
     """Dark outline color #0c0e12 must provide AAA contrast against white #ffffff."""
     contrast = _contrast_ratio("#0c0e12", "#ffffff")

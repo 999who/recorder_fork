@@ -112,7 +112,7 @@ def test_generate_updater_scripts():
     ps1, bat = generate_updater_scripts(
         zip_path="C:/temp/fake_update.zip",
         app_dir="C:/Program Files/Dictaphone",
-        exe_path="C:/Program Files/Dictaphone/InteligentnyDyktafonAI.exe",
+        exe_path="C:/Program Files/Dictaphone/EMANAGER-Signal.exe",
         current_pid=9999,
         restart_after=True
     )
@@ -131,7 +131,7 @@ def test_generate_updater_scripts():
     assert "$LASTEXITCODE -ge 8" in ps1_text
     assert "exit 0" in ps1_text
     assert "exit 1" in ps1_text
-    assert "InteligentnyDyktafonAI.exe" in ps1_text
+    assert "EMANAGER-Signal.exe" in ps1_text
 
     with open(bat, "r", encoding="cp852", errors="ignore") as f:
         bat_text = f.read()

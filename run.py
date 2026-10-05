@@ -1,5 +1,5 @@
 """
-Główny punkt wejścia aplikacji Inteligentnego Dyktafonu AI.
+Główny punkt wejścia aplikacji EMANAGER Signal.
 """
 
 import sys

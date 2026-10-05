@@ -48,7 +48,7 @@ def highpass_filter_audio(audio_arr: np.ndarray, sr: int = 16000, cutoff_hz: flo
 
 def normalize_audio(audio_arr: np.ndarray, target_peak: float = 0.92) -> np.ndarray:
     """
-    Normalizuje poziom głośności tablicy audio (Peak Normalization), jeśli sygnał jest cichy (np. cichy dyktafon).
+    Normalizuje poziom głośności tablicy audio (Peak Normalization), jeśli sygnał jest cichy (np. cichy mikrofon).
     Zapobiega wycinaniu cichych głosów przez Silero VAD i ułatwia transkrypcję modelowi Whisper.
     """
     if len(audio_arr) == 0:

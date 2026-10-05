@@ -55,7 +55,7 @@ def setup_windows_app_identity():
     - Ustawia SetCurrentProcessExplicitAppUserModelID, aby pasek zadań i Alt+Tab
       wyświetlały dedykowaną ikonę zamiast standardowej ikony Pythona.
     - Rejestruje AUMID w rejestrze (HKCU), aby Windows Action Center rozpoznawał
-      aplikację jako 'Inteligentny Dyktafon AI' z własną ikoną.
+      aplikację jako 'EMANAGER Signal' z własną ikoną.
     """
     if sys.platform != "win32":
         return

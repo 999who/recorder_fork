@@ -160,27 +160,9 @@ def test_tier1_feat3_dwm_titlebar_adaptation(qapp):
 
 def test_tier1_feat4_app_icon_contrast():
     """
-    Feature 4: App Icon Contrast Enhancement.
-    scripts/generate_icon.py includes dark stroke outline for microphone stand,
-    and recorder/resources/app_icon.png exists and provides contrast against pure white backgrounds.
+    Feature 4: App Icon.
+    recorder/resources/app_icon.png (EMANAGER Signal logo) exists and is a valid image file.
     """
-    gen_script = os.path.join(PROJECT_ROOT, "scripts", "generate_icon.py")
-    assert os.path.exists(gen_script), "Feature 4: scripts/generate_icon.py must exist"
-
-    with open(gen_script, "r", encoding="utf-8") as f:
-        code = f.read()
-
-    # Verify script includes stroke / outline / contrast logic for bracket/stand
-    has_outline_logic = (
-        "outline" in code.lower() or
-        "stroke" in code.lower() or
-        "pen_outline" in code.lower() or
-        "#1e293b" in code.lower() or
-        "#334155" in code.lower() or
-        "bracket" in code.lower() and ("pen" in code.lower() or "dark" in code.lower())
-    )
-    assert has_outline_logic, "Feature 4: scripts/generate_icon.py must implement dark stroke/outline for microphone stand"
-
     icon_png = os.path.join(PROJECT_ROOT, "recorder", "resources", "app_icon.png")
     assert os.path.exists(icon_png), f"Feature 4: Asset '{icon_png}' must exist"
     assert os.path.getsize(icon_png) > 1000, "app_icon.png must be a valid, non-empty image file"

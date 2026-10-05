@@ -1,5 +1,5 @@
 """
-Skrypt budowania aplikacji Inteligentnego Dyktafonu AI do wersji .EXE (Windows).
+Skrypt budowania aplikacji EMANAGER Signal do wersji .EXE (Windows).
 Użycie:
     python scripts/build_exe.py                        # wersja pełna (Parakeet + Whisper)
     python scripts/build_exe.py --variant parakeet-test  # wersja testowa obok głównej: własna nazwa exe,
@@ -27,14 +27,14 @@ DIST_DIR = os.path.join(ROOT_DIR, "dist")
 
 # Warianty budowania: nazwa folderu/exe, moduły do pominięcia i zawartość flavor.json (patrz recorder/flavor.py)
 VARIANTS = {
-    "": {"name": "InteligentnyDyktafonAI", "exclude": [], "flavor": None},
+    "": {"name": "EMANAGER-Signal", "exclude": [], "flavor": None},
     "parakeet-test": {
-        "name": "InteligentnyDyktafonAI-ParakeetTest",
+        "name": "EMANAGER-Signal-ParakeetTest",
         "exclude": ["faster_whisper", "ctranslate2"],
         "flavor": {
             "id": "parakeet-test",
-            "app_id": "InteligentnyDyktafonAI.ParakeetTest",
-            "app_name": "Inteligentny Dyktafon AI (Parakeet TEST)",
+            "app_id": "EMANAGER.Signal.ParakeetTest",
+            "app_name": "EMANAGER Signal (Parakeet TEST)",
             "whisper": False,
             "updates": False,
         },
@@ -147,7 +147,7 @@ def main():
     sys.stderr = tee
 
     print("=" * 70)
-    print("🚀 BUDOWANIE INTELIGENTNEGO DYKTAFONU AI DO PLIKU .EXE")
+    print("🚀 BUDOWANIE EMANAGER SIGNAL DO PLIKU .EXE")
     print("=" * 70)
     print(f"📄 Logi kompilacji są na bieżąco zapisywane do: {LOG_FILE}\n")
 

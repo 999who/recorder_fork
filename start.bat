@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 > nul
 echo ==============================================================================
-echo 🎙️ URUCHAMIANIE INTELIGENTNEGO DYKTAFONU AI
+echo 🎙️ URUCHAMIANIE EMANAGER SIGNAL
 echo ==============================================================================
 
 if not exist env (

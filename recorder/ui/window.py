@@ -287,7 +287,7 @@ class _ProgressProxy:
 
 class SmartDictaphoneWindow(QMainWindow):
     """
-    Główne okno aplikacji Inteligentnego Dyktafonu AI (Ambient AI & Recorder).
+    Główne okno aplikacji EMANAGER Signal (Ambient AI & Recorder).
     """
     def __init__(self):
         super().__init__()
@@ -478,7 +478,7 @@ class SmartDictaphoneWindow(QMainWindow):
         banner_layout.setContentsMargins(14, 6, 6, 6)
         banner_layout.setSpacing(6)
 
-        self.lbl_update_banner_text = QLabel("Dostępna jest nowa wersja dyktafonu")
+        self.lbl_update_banner_text = QLabel("Dostępna jest nowa wersja aplikacji")
         self.lbl_update_banner_text.setObjectName("UpdateBannerText")
         banner_layout.addWidget(self.lbl_update_banner_text, stretch=1)
 
@@ -1007,7 +1007,7 @@ class SmartDictaphoneWindow(QMainWindow):
         """Obsługuje wynik cichego sprawdzania aktualizacji przy starcie."""
         if result and result.get("has_update"):
             latest_v = result.get("latest_version", "")
-            self.lbl_update_banner_text.setText(f"Dostępna jest nowa wersja dyktafonu: <b>{latest_v}</b>")
+            self.lbl_update_banner_text.setText(f"Dostępna jest nowa wersja aplikacji: <b>{latest_v}</b>")
             self.banner_update.show()
 
     def set_pending_update(self, zip_path: str, version: str):
@@ -2108,9 +2108,9 @@ class SmartDictaphoneWindow(QMainWindow):
         """Aktualizuje opis ikony w zasobniku systemowym."""
         if getattr(self, "tray_icon", None) is not None:
             if state_text:
-                self.tray_icon.setToolTip(f"Inteligentny Dyktafon AI — {state_text}")
+                self.tray_icon.setToolTip(f"EMANAGER Signal — {state_text}")
             else:
-                self.tray_icon.setToolTip("Inteligentny Dyktafon AI")
+                self.tray_icon.setToolTip("EMANAGER Signal")
 
     def _on_tray_message_clicked(self):
         """Obsługuje kliknięcie w dymek powiadomienia (balloon) w zasobniku systemowym."""
@@ -2133,7 +2133,7 @@ class SmartDictaphoneWindow(QMainWindow):
         self._refresh_audio_devices()
         if source_mode == RecordSourceMode.SYSTEM_ONLY:
             msg_body = (
-                "Dyktafon odświeżył listę urządzeń audio i aplikacji w systemie Windows.\n\n"
+                "EMANAGER Signal odświeżył listę urządzeń audio i aplikacji w systemie Windows.\n\n"
                 "Zalecane kroki sprawdzające:\n"
                 "1. Upewnij się, że wybrany program (np. Discord) faktycznie odtwarza dźwięk.\n"
                 "2. Sprawdź w Ustawienia → Nagrywanie, czy wybrano właściwą aplikację lub «Wszystkie programy».\n"
@@ -2142,7 +2142,7 @@ class SmartDictaphoneWindow(QMainWindow):
             )
         else:
             msg_body = (
-                "Dyktafon odświeżył listę urządzeń audio w systemie Windows.\n\n"
+                "EMANAGER Signal odświeżył listę urządzeń audio w systemie Windows.\n\n"
                 "Zalecane kroki sprawdzające:\n"
                 "1. Sprawdź fizyczny przycisk MUTE na mikrofonie lub nadajniku bezprzewodowym.\n"
                 "2. Upewnij się, że w Ustawienia → Nagrywanie wybrano właściwy mikrofon.\n"
@@ -2210,7 +2210,7 @@ class SmartDictaphoneWindow(QMainWindow):
         if hasattr(self, "worker"):
             self.worker.reset_silence_alert()
         title = f"⚠️ Brak dźwięku od {mins_str}"
-        msg = f"Dyktafon rejestruje czas, ale nie wykryto mowy ani dźwięku.\nKliknij tutaj, aby sprawdzić stan urządzeń."
+        msg = f"EMANAGER Signal rejestruje czas, ale nie wykryto mowy ani dźwięku.\nKliknij tutaj, aby sprawdzić stan urządzeń."
         self._last_tray_message_type = "silence_alert"
         self._last_silence_source_mode = source_mode
         if getattr(self, "tray_icon", None) is not None:
@@ -2262,7 +2262,7 @@ class SmartDictaphoneWindow(QMainWindow):
             try:
                 if self.tray_icon.isVisible():
                     self.tray_icon.showMessage(
-                        "Inteligentny Dyktafon AI",
+                        "EMANAGER Signal",
                         "Aplikacja została zminimalizowana do zasobnika systemowego i nadal działa w tle.",
                         QSystemTrayIcon.MessageIcon.Information,
                         3000

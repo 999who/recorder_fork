@@ -21,13 +21,13 @@ CODE = (
 
 def test_default_flavor_unchanged():
     out = json.loads(_run(CODE, {"RECORDER_FLAVOR": ""}))
-    assert out["app_id"] == "InteligentnyDyktafonAI"
+    assert out["app_id"] == "EMANAGER.Signal"
     assert len(out["models"]) > 1
 
 
 def test_parakeet_test_flavor():
     out = json.loads(_run(CODE, {"RECORDER_FLAVOR": "parakeet-test"}))
-    assert out["app_id"] != "InteligentnyDyktafonAI"
+    assert out["app_id"] != "EMANAGER.Signal"
     assert out["models"] == ["parakeet"] or len(out["models"]) == 1
     assert out["engine"] == "parakeet" and out["created"] == "parakeet"
     assert out["upd"] is False

@@ -13,8 +13,8 @@ import sys
 PRESETS = {
     "parakeet-test": {
         "id": "parakeet-test",
-        "app_id": "InteligentnyDyktafonAI.ParakeetTest",
-        "app_name": "Inteligentny Dyktafon AI (Parakeet TEST)",
+        "app_id": "EMANAGER.Signal.ParakeetTest",
+        "app_name": "EMANAGER Signal (Parakeet TEST)",
         "whisper": False,
         "updates": False,
     },
@@ -22,8 +22,8 @@ PRESETS = {
 
 DEFAULT = {
     "id": "",
-    "app_id": "InteligentnyDyktafonAI",
-    "app_name": "Inteligentny Dyktafon AI",
+    "app_id": "EMANAGER.Signal",
+    "app_name": "EMANAGER Signal",
     "whisper": True,
     "updates": True,
 }

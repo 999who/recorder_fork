@@ -15,7 +15,7 @@ Szczegółowy opis założeń architektonicznych, pamięci projektu oraz statusu
 * ✏️ **Autokorekta (tabela „błędnie → poprawnie”):** Słownik użytkownika dla Parakeet działa jako tabela zamian po rozpoznaniu; Whisper nadal korzysta z promptu początkowego.
 * 🛡️ **Zaawansowane Filtry Anty-Halucynacyjne:** Algorytmiczne usuwanie patologicznych pętli powtórzeń (1-gramów i 2-gramów, np. zacięć śmiechu, oddechów czy wielokrotnych powtórzeń), z zachowaniem pełnej treści wartościowych zdań.
 * 🔔 **Inteligentne Ostrzeganie o Braku Dźwięku:** Dyskretny baner w stylu Windows 11 Fluent z szybkimi akcjami (*«Wszystko gra»* / *«Sprawdź dźwięk»*) oraz automatycznym przekazywaniem do Centrum Akcji Windows z priorytetem alarmu (przebijającym tryb *Nie przeszkadzać*) po 45s nieobecności.
-* 🪟 **Natywna Integracja z Windows & Tray:** Tożsamość procesu `InteligentnyDyktafonAI`, dedykowana ikona Fluent, dynamiczny zasobnik systemowy (Tray) z menu podręcznym i przywracaniem okna lewym klikiem.
+* 🪟 **Natywna Integracja z Windows & Tray:** Tożsamość procesu `EMANAGER.Signal`, dedykowana ikona Fluent, dynamiczny zasobnik systemowy (Tray) z menu podręcznym i przywracaniem okna lewym klikiem.
 * ☁️ **Agnostyczna Synchronizacja Chmurowa (Cloud Sync):** Transmisja segmentów transkrypcji na żywo do bazy Supabase / REST API / Webhooka CRM z trwałymi identyfikatorami UUID, buforem ponawiania prób bez utraty danych, bezkonfliktowym scalaniem i kolejką offline.
 * ⏱️ **Inteligentny Podział Sesji (Smart Session Splitting):** Automatyczne domykanie bieżącego spotkania po konfigurowalnym czasie ciszy (np. 15 minut) i płynne rozpoczynanie nowej sesji bez przerywania nasłuchu.
 * 💾 **Optymalizacja Pamięci RAM i Skalowalność 8h:** Stałe zużycie pamięci $O(1)$ w maratonach nagraniowych (4h–8h), automatyczna kompensacja asymetrii buforów audio, inteligentny throttling zapisu dyskowego I/O (zmniejszenie obciążenia SSD o 95%) oraz strumieniowy zapis dźwięku na dysk (`StreamingWavWriter`).
@@ -80,7 +80,7 @@ Aplikację można skompilować do samodzielnego pliku wykonywalnego dla systemu 
 # Uruchom dedykowany skrypt budowania PyInstaller:
 .\build_exe.ps1
 ```
-Gotowy plik `.exe` wraz ze wszystkimi zależnościami zostanie utworzony w katalogu `dist/InteligentnyDyktafonAI/`.
+Gotowy plik `.exe` wraz ze wszystkimi zależnościami zostanie utworzony w katalogu `dist/EMANAGER-Signal/`.
 
 ---
 
@@ -94,7 +94,7 @@ recorder67/
 ├── .env.example                # Przykładowy szablon konfiguracji środowiska
 ├── PROJECT_GOAL.md             # Pamięć projektu, roadmapa i architektura
 ├── requirements.txt            # Zależności Python (PySide6, onnx-asr, onnxruntime, faster-whisper, itp.; bez torch)
-├── InteligentnyDyktafonAI.spec # Specyfikacja kompilacji PyInstaller
+├── EMANAGER-Signal.spec # Specyfikacja kompilacji PyInstaller
 ├── build_exe.ps1               # Skrypt automatycznego budowania EXE
 │
 └── recorder/

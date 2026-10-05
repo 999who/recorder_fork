@@ -52,7 +52,7 @@
 
 2. **Greedy Decoding (whisper_beam_size = 1) dla large-v3-turbo:**
    - Zmieniono domyślną wartość `whisper_beam_size` z 5 na 1 w `recorder/config.py`.
-   - Zaktualizowano `c:\Users\targo\Emanager\InteligentnyDyktafonAI\user_settings.json` na `whisper_beam_size: 1`.
+   - Zaktualizowano `c:\Users\targo\Emanager\EMANAGER-Signal\user_settings.json` na `whisper_beam_size: 1`.
    - Zapewnia to 3- do 4-krotne skrócenie czasu inferencji na modelu `large-v3-turbo` bez zauważalnego spadku precyzji języka polskiego.
 
 3. **Detekcja Sprzętowa AMD Ryzen AI i Dedykowany Profil Zen 5:**

@@ -62,7 +62,6 @@
     <Compile Include="recorder\ui\workers.py" />
     <Compile Include="scripts\build_exe.py" />
     <Compile Include="scripts\download_fonts.py" />
-    <Compile Include="scripts\generate_icon.py" />
     <Compile Include="scripts\verify_theme_benchmarks.py" />
     <Compile Include="tests\conftest.py" />
     <Compile Include="tests\test_crm_live_sync_dedup.py" />

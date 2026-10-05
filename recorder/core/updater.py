@@ -317,7 +317,7 @@ class DownloadUpdateWorker(QThread):
             return
 
         temp_dir = tempfile.gettempdir()
-        zip_path = os.path.join(temp_dir, f"InteligentnyDyktafonAI_{self.target_version}.zip")
+        zip_path = os.path.join(temp_dir, f"EMANAGER-Signal_{self.target_version}.zip")
         
         try:
             self.progress_signal.emit(5, "Nawiązywanie połączenia z serwerem wydań GitHub...")
@@ -376,7 +376,7 @@ def generate_updater_scripts(
     Zwraca (ścieżka_ps1, ścieżka_bat).
     """
     temp_dir = tempfile.gettempdir()
-    temp_extract = os.path.join(temp_dir, "InteligentnyDyktafonAI_Update")
+    temp_extract = os.path.join(temp_dir, "EMANAGER-Signal_Update")
     updater_ps1 = os.path.join(temp_dir, "run_app_update.ps1")
     updater_bat = os.path.join(temp_dir, "run_app_update.bat")
 
@@ -392,7 +392,7 @@ Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Inteligentny Dyktafon AI - Instalacja Aktualizacji"
+$form.Text = "EMANAGER Signal - Instalacja Aktualizacji"
 $form.Size = New-Object System.Drawing.Size(500, 220)
 $form.StartPosition = "CenterScreen"
 $form.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#1a1a26")
@@ -403,7 +403,7 @@ $form.MinimizeBox = $false
 $form.TopMost = $true
 
 $lblTitle = New-Object System.Windows.Forms.Label
-$lblTitle.Text = "Trwa instalowanie nowej wersji dyktafonu..."
+$lblTitle.Text = "Trwa instalowanie nowej wersji aplikacji..."
 $lblTitle.Location = New-Object System.Drawing.Point(24, 18)
 $lblTitle.Size = New-Object System.Drawing.Size(450, 26)
 $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
@@ -469,7 +469,7 @@ try {{
     New-Item -ItemType Directory -Path "{safe_extract}" -Force | Out-Null
 
     # Krok 3: Rozpakowanie archiwum ZIP
-    Set-UpdateProgress 45 "Rozpakowywanie nowej wersji dyktafonu..." "Wyodrębnianie plików aktualizacji..."
+    Set-UpdateProgress 45 "Rozpakowywanie nowej wersji aplikacji..." "Wyodrębnianie plików aktualizacji..."
     tar -xf "{safe_zip}" -C "{safe_extract}" 2>$null
     if (-not (Test-Path "{safe_extract}\\*")) {{
         Expand-Archive -Path "{safe_zip}" -DestinationPath "{safe_extract}" -Force
@@ -478,11 +478,11 @@ try {{
     # Krok 4: Podmiana plików w folderze aplikacji
     Set-UpdateProgress 75 "Instalowanie nowych plików programu..." "Kopiowanie do katalogu: {safe_app_dir}"
     $sourceDir = "{safe_extract}"
-    $exeFound = Get-ChildItem -Path "{safe_extract}" -Filter "InteligentnyDyktafonAI.exe" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    $exeFound = Get-ChildItem -Path "{safe_extract}" -Filter "EMANAGER-Signal.exe" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($exeFound) {{
         $sourceDir = $exeFound.DirectoryName
-    }} elseif (Test-Path "{safe_extract}\\InteligentnyDyktafonAI") {{
-        $sourceDir = "{safe_extract}\\InteligentnyDyktafonAI"
+    }} elseif (Test-Path "{safe_extract}\\EMANAGER-Signal") {{
+        $sourceDir = "{safe_extract}\\EMANAGER-Signal"
     }}
     & robocopy "$sourceDir" "{safe_app_dir}" /e /np /r:5 /w:1 | Out-Null
     if ($LASTEXITCODE -ge 8) {{
@@ -503,7 +503,7 @@ try {{
     Start-Sleep -Milliseconds 600
 
     if ("{restart_val}" -eq "1") {{
-        $lblStatus.Text = "Uruchamianie nowej wersji dyktafonu..."
+        $lblStatus.Text = "Uruchamianie nowej wersji aplikacji..."
         $form.Refresh()
         [System.Windows.Forms.Application]::DoEvents()
         Start-Sleep -Milliseconds 500
@@ -545,8 +545,8 @@ tar -xf "{zip_path}" -C "{temp_extract}" 2>nul
 if not exist "{temp_extract}\\*" powershell -NoProfile -Command "Expand-Archive -Path '{zip_path}' -DestinationPath '{temp_extract}' -Force"
 
 set "SRC={temp_extract}"
-if exist "{temp_extract}\\InteligentnyDyktafonAI\\InteligentnyDyktafonAI.exe" set "SRC={temp_extract}\\InteligentnyDyktafonAI"
-for /d %%D in ("{temp_extract}\\*") do if exist "%%D\\InteligentnyDyktafonAI.exe" set "SRC=%%D"
+if exist "{temp_extract}\\EMANAGER-Signal\\EMANAGER-Signal.exe" set "SRC={temp_extract}\\EMANAGER-Signal"
+for /d %%D in ("{temp_extract}\\*") do if exist "%%D\\EMANAGER-Signal.exe" set "SRC=%%D"
 
 robocopy "%SRC%" "{app_dir}" /e /np /r:5 /w:1 > nul
 

@@ -1,4 +1,4 @@
-# Projekt: Inteligentny Asystent Biurowy AI (Ambient AI & Recorder)
+# Projekt: EMANAGER Signal – Asystent Biurowy AI (Ambient AI & Recorder)
 
 > **UWAGA:** Niniejszy dokument stanowi żywe źródło wiedzy i celów projektowych (Project Memory / Agent Context). Może być modyfikowany, rozszerzany i aktualizowany w trakcie rozwoju projektu wraz ze zmianą wymagań lub założeń architektonicznych.
 
@@ -64,7 +64,7 @@ graph TD
 - [x] **Wgrywanie Gotowych Plików Audio/Wideo**: Obsługa formatów WAV, MP3, M4A, FLAC, OGG, AAC, MP4, MKV z normalizacją 16kHz mono i natychmiastowym autozapisem TXT/JSON.
 - [x] **Hybrydowe Źródła Audio (Mikrofon + WASAPI Loopback)**: Niezależne lub równoległe rejestrowanie mikrofonu oraz dźwięku systemu/spotkań (Discord, MS Teams, Zoom), izolacja procesu audio (`TargetAppAudioMonitor`), suwaki VU i niezależne przyciski wyciszenia MUTE w locie.
 - [x] **Inteligentny System Ostrzeżeń o Braku Dźwięku**: Wykrywanie przedłużającego się braku mowy i dźwięku w aktywnej sesji (domyślnie 5 min, regulacja 1–20 min), kompaktowy baner Toast z przyciskami *«Wszystko gra»* / *«Sprawdź dźwięk»*, zintegrowany z Centrum Akcji Windowsa (z priorytetem alarmu przebijającym tryb *Nie przeszkadzać*) i tłumieniem dźwięków powiadomienia w nagraniu.
-- [x] **Natywna Integracja z Windows & Oficjalna Ikona Fluent**: Zarejestrowana tożsamość procesu `InteligentnyDyktafonAI`, dedykowana przezroczysta ikona aplikacji, zasobnik systemowy (Tray) z menu podręcznym i przywracaniem okna lewym klikiem.
+- [x] **Natywna Integracja z Windows & Oficjalna Ikona Fluent**: Zarejestrowana tożsamość procesu `EMANAGER.Signal`, dedykowana przezroczysta ikona aplikacji, zasobnik systemowy (Tray) z menu podręcznym i przywracaniem okna lewym klikiem.
 - [x] **Stabilizacja Maratonów Nagraniowych (4h–8h) & Skalowalność Pamięci RAM do O(1)**:
   - Eliminacja wycieków pamięci i asymetrii buforów w mikserze audio `RealtimeAudioMixer`.
   - 30-sekundowy throttling zapisu dyskowego I/O (zmniejszenie obciążenia dysku SSD o 95% przy wielogodzinnych sesjach).

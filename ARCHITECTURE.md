@@ -1,4 +1,4 @@
-# Architektura Systemu Inteligentny Dyktafon AI (Recorder67)
+# Architektura Systemu EMANAGER Signal (Recorder67)
 
 ## 1. Przegląd Architektury i Przepływu Audio
 

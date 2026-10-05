@@ -23,8 +23,8 @@ def main():
     setup_windows_app_identity()
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Inteligentny Dyktafon AI")
-    app.setApplicationDisplayName("Inteligentny Dyktafon AI")
+    app.setApplicationName("EMANAGER Signal")
+    app.setApplicationDisplayName("EMANAGER Signal")
 
     ico_path = get_app_icon_path("ico")
     if ico_path and os.path.exists(ico_path):

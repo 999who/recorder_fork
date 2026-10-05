@@ -1,6 +1,6 @@
 @echo off
 rem ==============================================================================
-rem Skrypt budowania aplikacji Inteligentnego Dyktafonu AI do pliku EXE
+rem Skrypt budowania aplikacji EMANAGER Signal do pliku EXE
 rem ==============================================================================
 
 set "PYTHON_CMD="
@@ -17,7 +17,7 @@ echo [INFO] Rozpoczynanie kompilacji PyInstaller...
 
 if %ERRORLEVEL% equ 0 (
     echo.
-    echo [SUKCES] Gotowe! Plik wykonywalny znajduje sie w folderze: dist\InteligentnyDyktafonAI\
+    echo [SUKCES] Gotowe! Plik wykonywalny znajduje sie w folderze: dist\EMANAGER-Signal\
     echo [INFO] Pelny log z budowania zapisano w: build_log.txt
 ) else (
     echo.

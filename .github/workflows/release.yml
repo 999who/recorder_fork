@@ -50,16 +50,16 @@ jobs:
         run: |
           $rawVersion = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "latest" }
           $version = $rawVersion -replace '[/\\:]', '-'
-          $zipName = "InteligentnyDyktafonAI-$version-Windows.zip"
-          Compress-Archive -Path "dist/InteligentnyDyktafonAI/*" -DestinationPath $zipName -Force
+          $zipName = "EMANAGER-Signal-$version-Windows.zip"
+          Compress-Archive -Path "dist/EMANAGER-Signal/*" -DestinationPath $zipName -Force
           Write-Host "Utworzono paczke zip: $zipName"
           echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InteligentnyDyktafonAI-Windows
-          path: dist/InteligentnyDyktafonAI
+          name: EMANAGER-Signal-Windows
+          path: dist/EMANAGER-Signal
           if-no-files-found: error
 
       - name: Upload Build Log
