@@ -935,13 +935,16 @@ class SmartDictaphoneWindow(QMainWindow):
         t = current_tokens()
         body = max(13, get_font_size() + 3)
         from recorder.config import get_theme as _get_theme, get_speaker_colors as _get_speaker_colors
-        mic2_color = _get_speaker_colors(_get_theme()).get("mic2", t.speaker_mic)
+        lane_c = _get_speaker_colors(_get_theme())
         self.text_transcript.document().setDefaultStyleSheet(
             f"table.tr {{ margin: 0px; }}"
             f"td.t {{ color: {t.text_muted}; font-size: 11px; white-space: nowrap; padding: 6px 18px 12px 0px; }}"
             f"td.sm {{ color: {t.speaker_mic}; font-size: 10px; font-weight: 600; white-space: nowrap; padding: 6px 18px 12px 0px; }}"
             f"td.ss {{ color: {t.speaker_system}; font-size: 10px; font-weight: 600; white-space: nowrap; padding: 6px 18px 12px 0px; }}"
-            f"td.sm2 {{ color: {mic2_color}; font-size: 10px; font-weight: 600; white-space: nowrap; padding: 6px 18px 12px 0px; }}"
+            f"td.sm1 {{ color: {lane_c.get('mic1', t.speaker_mic)}; font-size: 10px; font-weight: 600; white-space: nowrap; padding: 6px 18px 12px 0px; }}"
+            f"td.sm2 {{ color: {lane_c.get('mic2', t.speaker_mic)}; font-size: 10px; font-weight: 600; white-space: nowrap; padding: 6px 18px 12px 0px; }}"
+            f"td.sm3 {{ color: {lane_c.get('mic3', t.speaker_mic)}; font-size: 10px; font-weight: 600; white-space: nowrap; padding: 6px 18px 12px 0px; }}"
+            f"td.sm4 {{ color: {lane_c.get('mic4', t.speaker_mic)}; font-size: 10px; font-weight: 600; white-space: nowrap; padding: 6px 18px 12px 0px; }}"
             f"td.x {{ color: {t.text_primary}; font-family: 'Source Serif 4', Georgia, 'Cambria', serif; font-size: {body}px; padding: 0px 0px 12px 0px; }}"
             f"p.hint {{ color: {t.text_secondary}; font-size: 13px; }}"
         )

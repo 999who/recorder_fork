@@ -44,6 +44,9 @@ except ImportError:
     pyaudio = None
 
 
+MAX_MIC_LANES = 4  # maksymalna liczba osobno transkrybowanych kanałów jednego mikrofonu
+
+
 class RealtimeAudioMixer:
     """
     Miesza dwa niezależne asynchroniczne strumienie audio 16kHz float32 (mikrofon + loopback)
@@ -217,12 +220,15 @@ class SmartAudioWorker(QThread):
         self.vad_detector_mic = SileroVADDetector(speech_threshold=mic_th, default_samplerate=16000)
         self.vad_detector_sys = SileroVADDetector(speech_threshold=sys_th, default_samplerate=16000)
         self.vad_detector = self.vad_detector_mic  # Kompatybilność wsteczna
-        # Prawy kanał mikrofonu stereo (druga osoba): osobny detektor VAD, pre-roll i bufor bloków
-        self.vad_detector_mic2 = SileroVADDetector(speech_threshold=mic_th, default_samplerate=16000)
-        self.pre_speech_chunks_mic2 = collections.deque(maxlen=15)
-        self.current_mic2_block_chunks = []
-        self.mic2_silence_samples = 0
+        # Mikrofon wielokanałowy (np. odbiornik Hollyland Lark): kanały 2-4 to kolejne osoby. Każdy ma osobny
+        # detektor VAD, pre-roll i bufor bloków (tagi "mic2".."mic4"); kanał 1 przechodzi dalej jako "mic1".
         self.mic_stereo_split = False
+        self._mic_lanes = 1
+        self.vad_detectors_extra = [SileroVADDetector(speech_threshold=mic_th, default_samplerate=16000)
+                                    for _ in range(MAX_MIC_LANES - 1)]
+        self.pre_speech_chunks_extra = [collections.deque(maxlen=15) for _ in range(MAX_MIC_LANES - 1)]
+        self.current_extra_block_chunks = [[] for _ in range(MAX_MIC_LANES - 1)]
+        self.extra_silence_samples = [0] * (MAX_MIC_LANES - 1)
 
         self.audio_mixer = RealtimeAudioMixer()
         self.state = SmartRecordState.STOPPED
@@ -346,9 +352,7 @@ class SmartAudioWorker(QThread):
         self.total_sys_samples_added = 0
         self.sys_silence_samples = 0
 
-        self.current_mic2_block_chunks = []
-        self.mic2_silence_samples = 0
-        self.pre_speech_chunks_mic2.clear()
+        self._reset_extra_lanes()
         self.mic_stereo_split = is_mic_stereo_split()
 
         self.block_index = 1
@@ -393,18 +397,17 @@ class SmartAudioWorker(QThread):
             self.wav_writer = None
 
         self._flush_mic_block()
-        self._flush_mic2_block()
+        self._flush_extra_blocks()
         self._flush_sys_block()
         self.session_start_datetime = datetime.now()
         self.frames = []
         self.block_index = 1
         self.current_mic_block_chunks = []
         self.current_sys_block_chunks = []
-        self.current_mic2_block_chunks = []
+        self._reset_extra_lanes()
         self.total_mic_samples_added = 0
         self.total_sys_samples_added = 0
         self.mic_silence_samples = 0
-        self.mic2_silence_samples = 0
         self.sys_silence_samples = 0
         self.continuous_silence_samples = 0
         self.session_split_silence_samples = 0
@@ -435,25 +438,26 @@ class SmartAudioWorker(QThread):
                     cur_dur = len(mic_arr) / 16000.0
                     end_sec = round(self.audio_mixer.get_current_timeline_samples() / 16000.0, 2)
                     start_sec = max(0.0, round(end_sec - cur_dur, 2))
-                    blocks.append((self.block_index, start_sec, end_sec, mic_arr, "mic"))
+                    blocks.append((self.block_index, start_sec, end_sec, mic_arr, self._lane1_tag()))
                     self.block_index += 1
             except Exception:
                 pass
             self.current_mic_block_chunks = []
 
-        # Prawy kanał mikrofonu stereo (druga osoba)
-        if self.current_mic2_block_chunks:
-            try:
-                mic2_arr = np.concatenate(self.current_mic2_block_chunks)
-                if len(mic2_arr) >= int(0.3 * 16000):
-                    cur_dur = len(mic2_arr) / 16000.0
-                    end_sec = round(self.audio_mixer.get_current_timeline_samples() / 16000.0, 2)
-                    start_sec = max(0.0, round(end_sec - cur_dur, 2))
-                    blocks.append((self.block_index, start_sec, end_sec, mic2_arr, "mic2"))
-                    self.block_index += 1
-            except Exception:
-                pass
-            self.current_mic2_block_chunks = []
+        # Dodatkowe kanały mikrofonu wielokanałowego (kolejne osoby)
+        for k in range(MAX_MIC_LANES - 1):
+            if self.current_extra_block_chunks[k]:
+                try:
+                    arr_k = np.concatenate(self.current_extra_block_chunks[k])
+                    if len(arr_k) >= int(0.3 * 16000):
+                        cur_dur = len(arr_k) / 16000.0
+                        end_sec = round(self.audio_mixer.get_current_timeline_samples() / 16000.0, 2)
+                        start_sec = max(0.0, round(end_sec - cur_dur, 2))
+                        blocks.append((self.block_index, start_sec, end_sec, arr_k, f"mic{k + 2}"))
+                        self.block_index += 1
+                except Exception:
+                    pass
+                self.current_extra_block_chunks[k] = []
 
         # Kanał systemu (Discord/Teams)
         if self.current_sys_block_chunks:
@@ -540,26 +544,87 @@ class SmartAudioWorker(QThread):
                     st_sec = max(0.0, round(en_sec - cur_dur, 2))
                     idx = self.block_index
                     self.block_index += 1
-                    self.rolling_block_ready_signal.emit(idx, st_sec, en_sec, block_arr, "mic")
+                    self.rolling_block_ready_signal.emit(idx, st_sec, en_sec, block_arr, self._lane1_tag())
             except Exception as e:
                 print(f"[SmartAudioWorker] Błąd flush mic block: {e}")
 
-    def _flush_mic2_block(self):
-        """Wypycha zgromadzone próbki prawego kanału mikrofonu stereo."""
-        if self.current_mic2_block_chunks and self.state != SmartRecordState.STOPPED:
+    def _lane1_tag(self) -> str:
+        """Tag kanału 1 mikrofonu: 'mic1' przy rozdzielonych kanałach, inaczej klasyczny 'mic'."""
+        return "mic1" if self._mic_lanes > 1 else "mic"
+
+    def _reset_extra_lanes(self):
+        for k in range(MAX_MIC_LANES - 1):
+            self.current_extra_block_chunks[k] = []
+            self.extra_silence_samples[k] = 0
+            self.pre_speech_chunks_extra[k].clear()
+
+    def _flush_extra_blocks(self):
+        """Wypycha zgromadzone próbki dodatkowych kanałów mikrofonu wielokanałowego."""
+        if self.state == SmartRecordState.STOPPED:
+            return
+        for k in range(MAX_MIC_LANES - 1):
+            if not self.current_extra_block_chunks[k]:
+                continue
             try:
-                arr = np.concatenate(self.current_mic2_block_chunks)
-                self.current_mic2_block_chunks = []
-                self.mic2_silence_samples = 0
+                arr = np.concatenate(self.current_extra_block_chunks[k])
+                self.current_extra_block_chunks[k] = []
+                self.extra_silence_samples[k] = 0
                 cur_dur = len(arr) / 16000.0
                 if cur_dur >= 0.5:
                     en_sec = round(self.audio_mixer.get_current_timeline_samples() / 16000.0, 2)
                     st_sec = max(0.0, round(en_sec - cur_dur, 2))
                     idx = self.block_index
                     self.block_index += 1
-                    self.rolling_block_ready_signal.emit(idx, st_sec, en_sec, arr, "mic2")
+                    self.rolling_block_ready_signal.emit(idx, st_sec, en_sec, arr, f"mic{k + 2}")
             except Exception as e:
-                print(f"[SmartAudioWorker] Błąd flush mic2 block: {e}")
+                print(f"[SmartAudioWorker] Błąd flush mic{k + 2} block: {e}")
+
+    def _process_extra_lane(self, k: int, chunk_16k: np.ndarray):
+        """Obsługa kanału k+2 mikrofonu wielokanałowego: poziom, VAD, bufor i cięcie bloków (tag 'mic{k+2}')."""
+        norm = float(np.linalg.norm(chunk_16k))
+        rms = (norm / np.sqrt(len(chunk_16k))) if len(chunk_16k) > 0 else 0.0
+        lvl = min(100.0, max(0.0, (rms ** 0.65) * 180.0))
+        self.mic_level = max(self.mic_level, lvl)
+        is_speech, _prob = self.vad_detectors_extra[k].process_chunk(chunk_16k, samplerate=16000, rms_level=lvl)
+        tag = f"mic{k + 2}"
+
+        with self._lock:
+            if self.state != SmartRecordState.MANUAL_PAUSED:
+                if is_speech:
+                    self.mic_speech_active = True
+                    if self.state in [SmartRecordState.AUTO_PAUSED, SmartRecordState.RECORDING_SILENCE_COUNTDOWN]:
+                        self.state = SmartRecordState.RECORDING_SPEECH
+                        self.state_changed_signal.emit(self.state)
+                        while self.pre_speech_chunks_extra[k]:
+                            self.current_extra_block_chunks[k].append(self.pre_speech_chunks_extra[k].popleft())
+                    self.silence_samples_count = 0
+                    self.continuous_silence_samples = 0
+                    self.session_split_silence_samples = 0
+                    self.extra_silence_samples[k] = 0
+                    self.session_has_speech = True
+                    self.silence_alert_emitted = False
+                else:
+                    self.extra_silence_samples[k] += len(chunk_16k)
+                    self.pre_speech_chunks_extra[k].append(chunk_16k.copy())
+
+            if self.state in [SmartRecordState.RECORDING_SPEECH, SmartRecordState.RECORDING_SILENCE_COUNTDOWN]:
+                self.current_extra_block_chunks[k].append(chunk_16k.copy())
+
+            if self.current_extra_block_chunks[k] and self.state not in (SmartRecordState.MANUAL_PAUSED, SmartRecordState.STOPPED):
+                cur_dur = sum(len(c) for c in self.current_extra_block_chunks[k]) / 16000.0
+                sil_dur = self.extra_silence_samples[k] / 16000.0
+                ready, forced = should_cut_block(
+                    cur_dur, sil_dur, self.state == SmartRecordState.AUTO_PAUSED, self.block_profile
+                )
+                if ready:
+                    arr = np.concatenate(self.current_extra_block_chunks[k])
+                    self.current_extra_block_chunks[k] = [arr[-self.OVERLAP_SAMPLES:].copy()] if (forced and self.OVERLAP_SAMPLES > 0) else []
+                    self.extra_silence_samples[k] = 0
+                    end_sec = round(self.audio_mixer.get_current_timeline_samples() / 16000.0, 2)
+                    start_sec = max(0.0, round(end_sec - cur_dur, 2))
+                    idx = self.block_index
+                    self.block_index += 1
+                    self.rolling_block_ready_signal.emit(idx, start_sec, end_sec, arr, tag)
 
     def _flush_sys_block(self):
         """Wypycha zgromadzone próbki audio z systemu przed wyciszeniem lub zatrzymaniem."""
@@ -602,7 +667,8 @@ class SmartAudioWorker(QThread):
         self.mic_speech_active = False
         self.sys_speech_active = False
         self.vad_detector_mic.reset()
-        self.vad_detector_mic2.reset()
+        for _det in self.vad_detectors_extra:
+            _det.reset()
         self.vad_detector_sys.reset()
         self.mic_stereo_split = is_mic_stereo_split()
 
@@ -811,19 +877,21 @@ class SmartAudioWorker(QThread):
                             if len(raw_np) == 0:
                                 return (None, pyaudio.paContinue)
 
-                            right_16k = None
+                            extra_chs = []
+                            lane_n = min(MAX_MIC_LANES, mic_ch) if (self.mic_stereo_split and mic_ch >= 2) else 1
                             if mic_ch > 1:
                                 usable_len = (len(raw_np) // mic_ch) * mic_ch
                                 if usable_len > 0:
                                     frames_2d = raw_np[:usable_len].reshape(-1, mic_ch)
                                     mono = np.mean(frames_2d, axis=1)
-                                    if self.mic_stereo_split and mic_ch >= 2:
-                                        left_ch = frames_2d[:, 0]
-                                        right_ch = frames_2d[:, 1]
+                                    if lane_n > 1:
+                                        lane_chs = [np.ascontiguousarray(frames_2d[:, i]) for i in range(lane_n)]
                                 else:
                                     mono = raw_np.flatten()
+                                    lane_n = 1
                             else:
                                 mono = raw_np.flatten()
+                            self._mic_lanes = lane_n
 
                             if mic_sr != 16000 and len(mono) > 0:
                                 chunk_16k = resample_to_16k(mono, mic_sr)
@@ -833,18 +901,15 @@ class SmartAudioWorker(QThread):
                             if len(chunk_16k) == 0:
                                 return (None, pyaudio.paContinue)
 
-                            # Tryb stereo: lewy kanał (osoba 1) przechodzi dalej jako "mic", prawy (osoba 2) jako "mic2".
-                            # Do pliku WAV trafia mieszanka obu kanałów (mono), więc nagranie brzmi jak dotychczas.
+                            # Wiele osób na jednym urządzeniu: kanał 1 przechodzi dalej jako "mic1", kanały 2-4 jako "mic2".."mic4".
+                            # Do pliku WAV trafia mieszanka wszystkich kanałów (mono), więc nagranie brzmi jak dotychczas.
                             mix_16k = chunk_16k
-                            if self.mic_stereo_split and mic_ch >= 2 and usable_len > 0:
-                                if mic_sr != 16000:
-                                    chunk_16k = resample_to_16k(np.ascontiguousarray(left_ch), mic_sr)
-                                    right_16k = resample_to_16k(np.ascontiguousarray(right_ch), mic_sr)
-                                else:
-                                    chunk_16k = np.ascontiguousarray(left_ch)
-                                    right_16k = np.ascontiguousarray(right_ch)
-                                if len(chunk_16k) == 0 or len(right_16k) == 0:
+                            if lane_n > 1:
+                                lanes_16k = [resample_to_16k(c, mic_sr) if mic_sr != 16000 else c for c in lane_chs]
+                                if any(len(c) == 0 for c in lanes_16k):
                                     return (None, pyaudio.paContinue)
+                                chunk_16k = lanes_16k[0]
+                                extra_chs = lanes_16k[1:]
 
                             norm_factor = float(np.linalg.norm(chunk_16k))
                             rms = (norm_factor / np.sqrt(len(chunk_16k))) if len(chunk_16k) > 0 else 0.0
@@ -900,53 +965,10 @@ class SmartAudioWorker(QThread):
                                         start_sec = max(0.0, round(end_sec - cur_dur, 2))
                                         idx = self.block_index
                                         self.block_index += 1
-                                        self.rolling_block_ready_signal.emit(idx, start_sec, end_sec, block_arr, "mic")
+                                        self.rolling_block_ready_signal.emit(idx, start_sec, end_sec, block_arr, self._lane1_tag())
 
-                            # Prawy kanał mikrofonu stereo (osoba 2): osobny VAD i bloki z tagiem "mic2"
-                            if right_16k is not None:
-                                r_norm = float(np.linalg.norm(right_16k))
-                                r_rms = (r_norm / np.sqrt(len(right_16k))) if len(right_16k) > 0 else 0.0
-                                r_lvl = min(100.0, max(0.0, (r_rms ** 0.65) * 180.0))
-                                self.mic_level = max(self.mic_level, r_lvl)
-                                r_speech, _r_prob = self.vad_detector_mic2.process_chunk(right_16k, samplerate=16000, rms_level=r_lvl)
-
-                                with self._lock:
-                                    if self.state != SmartRecordState.MANUAL_PAUSED:
-                                        if r_speech:
-                                            self.mic_speech_active = True
-                                            if self.state in [SmartRecordState.AUTO_PAUSED, SmartRecordState.RECORDING_SILENCE_COUNTDOWN]:
-                                                self.state = SmartRecordState.RECORDING_SPEECH
-                                                self.state_changed_signal.emit(self.state)
-                                                while self.pre_speech_chunks_mic2:
-                                                    self.current_mic2_block_chunks.append(self.pre_speech_chunks_mic2.popleft())
-                                            self.silence_samples_count = 0
-                                            self.continuous_silence_samples = 0
-                                            self.session_split_silence_samples = 0
-                                            self.mic2_silence_samples = 0
-                                            self.session_has_speech = True
-                                            self.silence_alert_emitted = False
-                                        else:
-                                            self.mic2_silence_samples += len(right_16k)
-                                            self.pre_speech_chunks_mic2.append(right_16k.copy())
-
-                                    if self.state in [SmartRecordState.RECORDING_SPEECH, SmartRecordState.RECORDING_SILENCE_COUNTDOWN]:
-                                        self.current_mic2_block_chunks.append(right_16k.copy())
-
-                                    if self.current_mic2_block_chunks and self.state not in (SmartRecordState.MANUAL_PAUSED, SmartRecordState.STOPPED):
-                                        r_dur = sum(len(c) for c in self.current_mic2_block_chunks) / 16000.0
-                                        r_sil = self.mic2_silence_samples / 16000.0
-                                        r_ready, r_forced = should_cut_block(
-                                            r_dur, r_sil, self.state == SmartRecordState.AUTO_PAUSED, self.block_profile
-                                        )
-                                        if r_ready:
-                                            r_arr = np.concatenate(self.current_mic2_block_chunks)
-                                            self.current_mic2_block_chunks = [r_arr[-self.OVERLAP_SAMPLES:].copy()] if (r_forced and self.OVERLAP_SAMPLES > 0) else []
-                                            self.mic2_silence_samples = 0
-                                            r_end = round(self.audio_mixer.get_current_timeline_samples() / 16000.0, 2)
-                                            r_start = max(0.0, round(r_end - r_dur, 2))
-                                            r_idx = self.block_index
-                                            self.block_index += 1
-                                            self.rolling_block_ready_signal.emit(r_idx, r_start, r_end, r_arr, "mic2")
+                            for _k, _lane_chunk in enumerate(extra_chs):
+                                self._process_extra_lane(_k, _lane_chunk)
                         except Exception:
                             pass
                         return (None, pyaudio.paContinue)

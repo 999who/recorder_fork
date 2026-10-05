@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional
 
 from recorder.flavor import WHISPER_ENABLED, UPDATES_ENABLED
 
@@ -244,8 +244,10 @@ def load_user_settings(force_reload: bool = False) -> dict:
         "onnx_threads": int(get_env_variable("ONNX_THREADS", "3")),
         "polish_only_filter": get_env_variable("POLISH_ONLY_FILTER", "true").lower() in ("1", "true", "yes"),
         "mic_stereo_split": get_env_variable("MIC_STEREO_SPLIT", "false").lower() in ("1", "true", "yes"),
-        "mic_name_left": get_env_variable("MIC_NAME_LEFT", "Osoba 1"),
-        "mic_name_right": get_env_variable("MIC_NAME_RIGHT", "Osoba 2"),
+        "mic_name_1": get_env_variable("MIC_NAME_1", "Osoba 1"),
+        "mic_name_2": get_env_variable("MIC_NAME_2", "Osoba 2"),
+        "mic_name_3": get_env_variable("MIC_NAME_3", "Osoba 3"),
+        "mic_name_4": get_env_variable("MIC_NAME_4", "Osoba 4"),
         "parakeet_model_path": get_env_variable("PARAKEET_MODEL_PATH", ""),
         "custom_replacements": [],            # lista par [błędnie, poprawnie] stosowana po rozpoznaniu
         "replacements_for_whisper": False,    # autokorekty domyślnie tylko dla Parakeet (Whisper ma initial_prompt)
@@ -469,11 +471,16 @@ def get_theme() -> str:
     return str(st.get("theme", "classic_dark")).strip() or "classic_dark"
 
 
+# Kolory czterech kanałów mikrofonu wielokanałowego: 1 czerwony, 2 żółty, 3 miętowy, 4 fioletowy.
+# Dźwięk systemu jest biały (w jasnych motywach ciemny grafit, bo biały byłby niewidoczny na jasnym tle).
+_MIC_LANE_COLORS_DARK = {"mic1": "#ff5c5c", "mic2": "#e7a93f", "mic3": "#3fc9b4", "mic4": "#a78bfa"}
+_MIC_LANE_COLORS_LIGHT = {"mic1": "#b91c1c", "mic2": "#b45309", "mic3": "#0f766e", "mic4": "#6d28d9"}
+
 THEME_SPEAKER_COLORS: Dict[str, Dict[str, str]] = {
-    "classic_dark": {"mic": "#3fc9b4", "system": "#e7a93f", "mic2": "#f472b6"},
-    "classic_light": {"mic": "#0369a1", "system": "#7c3aed", "mic2": "#be185d"},
-    "emanager_dark": {"mic": "#ff6b6b", "system": "#38bdf8", "mic2": "#facc15"},
-    "emanager_light": {"mic": "#b91c1c", "system": "#1d4ed8", "mic2": "#a16207"},
+    "classic_dark": {"mic": "#3fc9b4", "system": "#f1f5f9", **_MIC_LANE_COLORS_DARK},
+    "classic_light": {"mic": "#0369a1", "system": "#1f2937", **_MIC_LANE_COLORS_LIGHT},
+    "emanager_dark": {"mic": "#ff6b6b", "system": "#f1f5f9", **_MIC_LANE_COLORS_DARK},
+    "emanager_light": {"mic": "#b91c1c", "system": "#1f2937", **_MIC_LANE_COLORS_LIGHT},
 }
 
 
@@ -488,12 +495,10 @@ def is_mic_stereo_split() -> bool:
     return bool(load_user_settings().get("mic_stereo_split", False))
 
 
-def get_mic_channel_names() -> Tuple[str, str]:
-    """Nazwy osób przypisane do lewego i prawego kanału mikrofonu stereo."""
+def get_mic_channel_names() -> List[str]:
+    """Nazwy osób przypisane do kanałów 1-4 mikrofonu wielokanałowego (puste pole = „Osoba N”)."""
     st = load_user_settings()
-    left = str(st.get("mic_name_left", "")).strip() or "Osoba 1"
-    right = str(st.get("mic_name_right", "")).strip() or "Osoba 2"
-    return left, right
+    return [str(st.get(f"mic_name_{i}", "")).strip() or f"Osoba {i}" for i in range(1, 5)]
 
 
 def get_font_size() -> int:

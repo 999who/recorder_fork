@@ -252,17 +252,22 @@ class SettingsDialog(QDialog):
         self.btn_refresh_mic.clicked.connect(lambda: self._fill_microphones(force=True))
         form.addRow(self._form_label("Mikrofon"), self._with_side_button(self.combo_mic, self.btn_refresh_mic))
 
-        self.chk_mic_stereo = QCheckBox("Mikrofon stereo: lewy i prawy kanał to dwie osoby (np. Hollyland Lark)")
+        self.chk_mic_stereo = QCheckBox("Wiele osób na jednym odbiorniku: każdy kanał to osobny mikrofon (np. Hollyland Lark)")
         self.chk_mic_stereo.setToolTip(
-            "Odbiornik z dwoma nadajnikami przekazuje je jako lewy i prawy kanał jednego urządzenia. "
-            "Po włączeniu każdy kanał jest transkrybowany osobno i podpisany przypisaną nazwą.")
+            "Odbiornik z nadajnikami przekazuje je jako kolejne kanały jednego urządzenia (do 4). "
+            "Po włączeniu każdy kanał jest transkrybowany osobno i podpisany przypisaną nazwą. "
+            "Wymaga urządzenia z co najmniej 2 kanałami wejściowymi.")
         form.addRow("", self.chk_mic_stereo)
-        self.edit_mic_name_left = QLineEdit()
-        self.edit_mic_name_left.setPlaceholderText("Osoba 1")
-        form.addRow(self._form_label("Lewy kanał (nadajnik 1)"), self.edit_mic_name_left)
-        self.edit_mic_name_right = QLineEdit()
-        self.edit_mic_name_right.setPlaceholderText("Osoba 2")
-        form.addRow(self._form_label("Prawy kanał (nadajnik 2)"), self.edit_mic_name_right)
+        self.edit_mic_names = []
+        for i in range(1, 5):
+            edit = QLineEdit()
+            edit.setPlaceholderText(f"Osoba {i}")
+            edit.setToolTip(f"Nazwa wyświetlana przy wypowiedziach z kanału {i} (nadajnik {i})")
+            self.edit_mic_names.append(edit)
+            from recorder.config import get_speaker_colors, get_theme
+            lbl = self._form_label(f"Mikrofon {i}")
+            lbl.setStyleSheet(f"color: {get_speaker_colors(get_theme()).get(f'mic{i}', '')}; font-weight: 600;")
+            form.addRow(lbl, edit)
         self.chk_mic_stereo.toggled.connect(self._on_mic_stereo_toggled)
         self._on_mic_stereo_toggled(False)
 
@@ -321,7 +326,7 @@ class SettingsDialog(QDialog):
             note.setWordWrap(True)
             layout.addWidget(note)
             for w in (self.combo_default_source_mode, self.combo_mic, self.btn_refresh_mic, self.chk_mic_stereo,
-                      self.edit_mic_name_left, self.edit_mic_name_right,
+                      *self.edit_mic_names,
                       self.combo_loopback, self.btn_refresh_loopback, self.combo_model, self.btn_auto_model):
                 w.setEnabled(False)
 
@@ -377,8 +382,8 @@ class SettingsDialog(QDialog):
         return box
 
     def _on_mic_stereo_toggled(self, checked: bool):
-        self.edit_mic_name_left.setEnabled(bool(checked))
-        self.edit_mic_name_right.setEnabled(bool(checked))
+        for edit in self.edit_mic_names:
+            edit.setEnabled(bool(checked))
 
     def _on_rec_mode_changed(self, _index: int = 0):
         mode = self.combo_default_source_mode.currentData()
@@ -1271,8 +1276,8 @@ class SettingsDialog(QDialog):
         self._on_model_changed()
         self._fill_microphones(selected_name=str(st.get("mic_device_name", "")).strip())
         self.chk_mic_stereo.setChecked(bool(st.get("mic_stereo_split", False)))
-        self.edit_mic_name_left.setText(str(st.get("mic_name_left", "") or ""))
-        self.edit_mic_name_right.setText(str(st.get("mic_name_right", "") or ""))
+        for i, edit in enumerate(self.edit_mic_names, start=1):
+            edit.setText(str(st.get(f"mic_name_{i}", "") or ""))
         self._on_mic_stereo_toggled(self.chk_mic_stereo.isChecked())
         self._fill_loopbacks(selected_index=str(st.get("loopback_device_index", "")).strip())
         self._fill_target_apps(selected_exe=str(st.get("target_app_filter", "")).strip())
@@ -1432,8 +1437,7 @@ class SettingsDialog(QDialog):
             "mic_device_name": self.combo_mic.currentData() or "",
             "mic_device_label": self.combo_mic.currentText() if self.combo_mic.currentData() else "",
             "mic_stereo_split": self.chk_mic_stereo.isChecked(),
-            "mic_name_left": self.edit_mic_name_left.text().strip(),
-            "mic_name_right": self.edit_mic_name_right.text().strip(),
+            **{f"mic_name_{i}": edit.text().strip() for i, edit in enumerate(self.edit_mic_names, start=1)},
             "loopback_device_index": self.combo_loopback.currentData() or "",
             "loopback_device_label": self.combo_loopback.currentText() if self.combo_loopback.currentData() else "",
             "target_app_filter": self.combo_target_app.currentData() or "",

@@ -19,7 +19,6 @@ from recorder.config import (
     get_theme,
     get_speaker_colors,
     get_mic_channel_names,
-    is_mic_stereo_split,
 )
 
 
@@ -348,10 +347,10 @@ class RollingTranscriptionWorker(QThread):
     @staticmethod
     def _default_speaker_for_channel(channel: str) -> str:
         """Nazwa mówcy przypisana do kanału: w trybie stereo lewy/prawy kanał mikrofonu to dwie nazwane osoby."""
-        if channel == "mic2":
-            return get_mic_channel_names()[1]
+        if channel in ("mic1", "mic2", "mic3", "mic4"):
+            return get_mic_channel_names()[int(channel[3]) - 1]
         if channel == "mic":
-            return get_mic_channel_names()[0] if is_mic_stereo_split() else "Mikrofon"
+            return "Mikrofon"
         return "Dźwięk Systemu"
 
     def _dedupe_overlap(self, block: "RollingBlock", words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -381,7 +380,7 @@ class RollingTranscriptionWorker(QThread):
         spk_colors = get_speaker_colors(active_theme)
         mic_color = spk_colors.get("mic", "#4cc9f0")
         sys_color = spk_colors.get("system", "#a370f7")
-        mic2_color = spk_colors.get("mic2", mic_color)
+        lane_colors = {f"mic{i}": spk_colors.get(f"mic{i}", mic_color) for i in range(1, 5)}
 
         plain_parts = []
         for t in combined_turns:
@@ -397,7 +396,7 @@ class RollingTranscriptionWorker(QThread):
             plain_parts.append(f"[{time_label}] {display_spk}: {txt}\n\n")
         full_plain = "".join(plain_parts)
 
-        from recorder.core.session import render_turn_rows_html
+        from recorder.core.session import render_turn_rows_html, speaker_channel_class
         html_parts = []
         display_turns = list(reversed(combined_turns)) if reverse_order else combined_turns
         for t in display_turns:
@@ -410,8 +409,8 @@ class RollingTranscriptionWorker(QThread):
             time_label = format_turn_timestamp(st, en, self.session_start_time, ts_format=ts_format, wall_start=t.get("wall_start"), wall_end=t.get("wall_end"))
             if channel == "system":
                 html_parts.append((time_label, spk, txt, "ss", sys_color))
-            elif channel == "mic2":
-                html_parts.append((time_label, spk, txt, "sm", mic2_color))
+            elif channel in lane_colors:
+                html_parts.append((time_label, spk, txt, speaker_channel_class(spk, channel), lane_colors[channel]))
             else:
                 html_parts.append((time_label, spk, txt, "sm", mic_color))
         full_html = render_turn_rows_html(html_parts) or "Brak zarejestrowanej mowy."
