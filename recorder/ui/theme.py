@@ -174,7 +174,7 @@ THEMES: Dict[str, ThemeDefinition] = {
         status_manualpaused_bg="#2f3743",
         status_manualpaused_text="#e6e9ee",
         speaker_mic_color="#3fc9b4",
-        speaker_system_color="#e7a93f",
+        speaker_system_color="#f1f5f9",
         speaker_mic="#3fc9b4",
         speaker_system="#f1f5f9",
         scrollbar_track="#161a20",
@@ -240,7 +240,7 @@ THEMES: Dict[str, ThemeDefinition] = {
         status_manualpaused_bg="#64748b",
         status_manualpaused_text="#ffffff",
         speaker_mic_color="#0369a1",
-        speaker_system_color="#7c3aed",
+        speaker_system_color="#1f2937",
         speaker_mic="#0369a1",
         speaker_system="#1f2937",
         scrollbar_track="#f8fafc",
@@ -306,7 +306,7 @@ THEMES: Dict[str, ThemeDefinition] = {
         status_manualpaused_bg="#6b7280",
         status_manualpaused_text="#ffffff",
         speaker_mic_color="#ff6b6b",
-        speaker_system_color="#38bdf8",
+        speaker_system_color="#f1f5f9",
         speaker_mic="#ff6b6b",
         speaker_system="#f1f5f9",
         scrollbar_track="#0c0e12",
@@ -372,7 +372,7 @@ THEMES: Dict[str, ThemeDefinition] = {
         status_manualpaused_bg="#6b7280",
         status_manualpaused_text="#ffffff",
         speaker_mic_color="#b91c1c",
-        speaker_system_color="#1d4ed8",
+        speaker_system_color="#1f2937",
         speaker_mic="#b91c1c",
         speaker_system="#1f2937",
         scrollbar_track="#fafafa",
@@ -1533,7 +1533,7 @@ def generate_theme_qss(
         color: #ef4444;
     }}
     QLabel#CloudStatus[status="purple"] {{
-        color: {t.speaker_system_color};
+        color: {"#a78bfa" if t.is_dark else "#6d28d9"};
     }}
 
     QPushButton#BtnManualSync {{
