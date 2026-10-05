@@ -18,6 +18,8 @@ from recorder.config import (
     is_adaptive_beam_size,
     get_theme,
     get_speaker_colors,
+    get_mic_channel_names,
+    is_mic_stereo_split,
 )
 
 
@@ -269,7 +271,7 @@ class RollingTranscriptionWorker(QThread):
         block.words = transcript_words
         if transcript_words:
             _, _, block_turns = format_words_to_turns(transcript_words)
-            default_spk = "Mikrofon" if block.channel_source == "mic" else "Dźwięk Systemu"
+            default_spk = self._default_speaker_for_channel(block.channel_source)
             from datetime import timedelta
             b_wall_st = getattr(block, "wall_start_time", None)
             if b_wall_st is None:
@@ -343,6 +345,15 @@ class RollingTranscriptionWorker(QThread):
             full_html
         )
 
+    @staticmethod
+    def _default_speaker_for_channel(channel: str) -> str:
+        """Nazwa mówcy przypisana do kanału: w trybie stereo lewy/prawy kanał mikrofonu to dwie nazwane osoby."""
+        if channel == "mic2":
+            return get_mic_channel_names()[1]
+        if channel == "mic":
+            return get_mic_channel_names()[0] if is_mic_stereo_split() else "Mikrofon"
+        return "Dźwięk Systemu"
+
     def _dedupe_overlap(self, block: "RollingBlock", words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Usuwa dubel słów na styku bloków z nakładką (patrz OverlapDeduper)."""
         return self._overlap_deduper.process(block.channel_source, block.start_sec, block.end_sec, words)
@@ -370,6 +381,7 @@ class RollingTranscriptionWorker(QThread):
         spk_colors = get_speaker_colors(active_theme)
         mic_color = spk_colors.get("mic", "#4cc9f0")
         sys_color = spk_colors.get("system", "#a370f7")
+        mic2_color = spk_colors.get("mic2", mic_color)
 
         plain_parts = []
         for t in combined_turns:
@@ -398,6 +410,8 @@ class RollingTranscriptionWorker(QThread):
             time_label = format_turn_timestamp(st, en, self.session_start_time, ts_format=ts_format, wall_start=t.get("wall_start"), wall_end=t.get("wall_end"))
             if channel == "system":
                 html_parts.append((time_label, spk, txt, "ss", sys_color))
+            elif channel == "mic2":
+                html_parts.append((time_label, spk, txt, "sm", mic2_color))
             else:
                 html_parts.append((time_label, spk, txt, "sm", mic_color))
         full_html = render_turn_rows_html(html_parts) or "Brak zarejestrowanej mowy."

@@ -49,6 +49,24 @@ def is_mapper_pseudo_device(raw_name: str) -> bool:
     return any(k in name_lower for k in mapper_keywords)
 
 
+def _merge_truncated_name_groups(groups: Dict[str, Dict[str, Any]]) -> None:
+    """
+    MME obcina nazwy urządzeń do 31 znaków, więc ten sam mikrofon występuje pod dwiema nazwami
+    (np. 'Mikrofon (2 - Wireless micropho' i 'Mikrofon (2 - Wireless microphone)'). Skrócona nazwa
+    jest przedrostkiem pełnej, więc takie grupy scalamy pod pełną nazwą.
+    """
+    names = sorted(groups, key=len)
+    for short in names:
+        if short not in groups or len(short) < 12:
+            continue
+        for full in sorted(groups, key=len, reverse=True):
+            if full != short and len(full) > len(short) and full.startswith(short):
+                groups[full]['variants'].extend(groups[short]['variants'])
+                groups[full]['is_default'] = groups[full]['is_default'] or groups[short]['is_default']
+                del groups[short]
+                break
+
+
 def get_working_input_devices(force_refresh: bool = False) -> List[Dict[str, Any]]:
     """
     Pobiera listę sprawnych urządzeń wejściowych (mikrofonów), ignorując surowe sterowniki WDM-KS.
@@ -127,6 +145,8 @@ def get_working_input_devices(force_refresh: bool = False) -> List[Dict[str, Any
                         'is_default': is_this_def
                     })
 
+            _merge_truncated_name_groups(grouped_devices)
+
             # Jeśli są dostępne rzeczywiste mikrofony fizyczne, odrzucamy aliasy maperów Windows
             candidate_groups = [g for g in grouped_devices.values() if not g['is_mapper']]
             if not candidate_groups:
@@ -140,6 +160,8 @@ def get_working_input_devices(force_refresh: bool = False) -> List[Dict[str, Any
 
                 is_def = g['is_default']
                 label = f"🎤 {g['name']}"
+                if primary['channels'] >= 2:
+                    label += f" [{primary['channels']} kanały]"
                 if is_def:
                     label += " (Domyślne)"
 

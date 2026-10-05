@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from recorder.flavor import WHISPER_ENABLED, UPDATES_ENABLED
 
@@ -243,6 +243,9 @@ def load_user_settings(force_reload: bool = False) -> dict:
         "asr_engine": get_env_variable("ASR_ENGINE", ""),  # "" = automatycznie (Parakeet bez CUDA, Whisper z CUDA)
         "onnx_threads": int(get_env_variable("ONNX_THREADS", "3")),
         "polish_only_filter": get_env_variable("POLISH_ONLY_FILTER", "true").lower() in ("1", "true", "yes"),
+        "mic_stereo_split": get_env_variable("MIC_STEREO_SPLIT", "false").lower() in ("1", "true", "yes"),
+        "mic_name_left": get_env_variable("MIC_NAME_LEFT", "Osoba 1"),
+        "mic_name_right": get_env_variable("MIC_NAME_RIGHT", "Osoba 2"),
         "parakeet_model_path": get_env_variable("PARAKEET_MODEL_PATH", ""),
         "custom_replacements": [],            # lista par [błędnie, poprawnie] stosowana po rozpoznaniu
         "replacements_for_whisper": False,    # autokorekty domyślnie tylko dla Parakeet (Whisper ma initial_prompt)
@@ -467,10 +470,10 @@ def get_theme() -> str:
 
 
 THEME_SPEAKER_COLORS: Dict[str, Dict[str, str]] = {
-    "classic_dark": {"mic": "#3fc9b4", "system": "#e7a93f"},
-    "classic_light": {"mic": "#0369a1", "system": "#7c3aed"},
-    "emanager_dark": {"mic": "#ff6b6b", "system": "#38bdf8"},
-    "emanager_light": {"mic": "#b91c1c", "system": "#1d4ed8"},
+    "classic_dark": {"mic": "#3fc9b4", "system": "#e7a93f", "mic2": "#f472b6"},
+    "classic_light": {"mic": "#0369a1", "system": "#7c3aed", "mic2": "#be185d"},
+    "emanager_dark": {"mic": "#ff6b6b", "system": "#38bdf8", "mic2": "#facc15"},
+    "emanager_light": {"mic": "#b91c1c", "system": "#1d4ed8", "mic2": "#a16207"},
 }
 
 
@@ -478,6 +481,19 @@ def get_speaker_colors(theme_id: Optional[str] = None) -> Dict[str, str]:
     if theme_id and theme_id in THEME_SPEAKER_COLORS:
         return THEME_SPEAKER_COLORS[theme_id]
     return THEME_SPEAKER_COLORS["classic_dark"]
+
+
+def is_mic_stereo_split() -> bool:
+    """Czy stereofoniczny mikrofon (np. odbiornik Hollyland Lark) ma być rozdzielony: lewy i prawy kanał to dwie osoby."""
+    return bool(load_user_settings().get("mic_stereo_split", False))
+
+
+def get_mic_channel_names() -> Tuple[str, str]:
+    """Nazwy osób przypisane do lewego i prawego kanału mikrofonu stereo."""
+    st = load_user_settings()
+    left = str(st.get("mic_name_left", "")).strip() or "Osoba 1"
+    right = str(st.get("mic_name_right", "")).strip() or "Osoba 2"
+    return left, right
 
 
 def get_font_size() -> int:

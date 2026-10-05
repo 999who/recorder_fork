@@ -32,6 +32,8 @@ def speaker_channel_class(speaker: str, channel: Optional[str] = None) -> str:
     """Klasa CSS kolumny mówcy: 'ss' dla dźwięku systemu, 'sm' dla mikrofonu i pozostałych."""
     if channel == "system":
         return "ss"
+    if channel == "mic2":
+        return "sm2"
     if channel == "mic":
         return "sm"
     low = (speaker or "").lower()
