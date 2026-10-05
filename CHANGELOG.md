@@ -1,5 +1,9 @@
-## [Unreleased]: Silnik Parakeet, usunięcie torch/PyQt6/diaryzacji
+## [v2.0]: EMANAGER Signal, silnik Parakeet, wiele mikrofonów
 
+- Nowa nazwa aplikacji **EMANAGER Signal** i nowe logo (exe `EMANAGER-Signal.exe`, identyfikator Windows `EMANAGER.Signal`). Instalacje o starej nazwie trzeba zainstalować ponownie ręcznie.
+- Nowy wygląd (motyw ciemny „notebook”).
+- Do 4 nazwanych kanałów mikrofonu (np. Hollyland Lark w trybie stereo), każdy z własnym kolorem; dźwięk systemu na biało.
+- Znacznik czasu w transkrypcji: godzina startu wypowiedzi `[HH:MM:SS]` zamiast zakresów offsetu.
 - Filtr języka: Parakeet v3 jest wielojęzyczny, więc fragmenty rozpoznane jako angielskie są pomijane (ustawienie „tylko język polski”).
 - Nowy silnik NVIDIA Parakeet TDT 0.6B v3 (onnx-asr, onnxruntime CPU int8) obok Whispera; wspólny interfejs `AsrEngine`.
 - Wybór silnika i liczby wątków (2–4) w ustawieniach; bez CUDA domyślnie Parakeet.
