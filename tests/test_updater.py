@@ -171,7 +171,9 @@ def test_settings_dialog_updates_tab(qapp):
 
     scroll = dlg.tabs.widget(updates_idx)
     assert scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-    assert scroll.widget().layout().contentsMargins() == dlg.tabs.widget(0).layout().contentsMargins()
+    first_tab = dlg.tabs.widget(0)
+    first_content = first_tab.widget() if hasattr(first_tab, "widget") else first_tab  # karty są opakowane w QScrollArea
+    assert scroll.widget().layout().contentsMargins() == first_content.layout().contentsMargins()
     diag_labels = dlg.grp_diagnostics.findChildren(QLabel)
     assert len(diag_labels) > 0
     assert all(lbl.wordWrap() for lbl in diag_labels)
