@@ -21,7 +21,7 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Wersja aplikacji i repozytorium GitHub
 APP_VERSION = "2.0"
-GITHUB_REPO = "lukaszziarnecki/recorder67"
+GITHUB_REPO = "999who/recorder_fork"
 
 # Parametry audio i VAD
 SAMPLE_RATE = 16000  # Wymuszone 16000 Hz dla Silero VAD i Whisper
