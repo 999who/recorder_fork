@@ -116,8 +116,8 @@ def format_turn_timestamp(st: float, en: float, session_start_time: Optional[dat
         clock_label = None
         clock_start_label = None
 
-    if ts_format == "clock_only" and clock_start_label:
-        return clock_start_label
+    if ts_format == "clock_only":
+        return clock_start_label or f"{s_min:02d}:{s_sec:02d}"
     elif ts_format == "offset_only":
         return offset_label
     elif clock_label:

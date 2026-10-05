@@ -297,7 +297,9 @@ def save_user_settings(settings: dict) -> bool:
 
 def get_timestamp_format() -> str:
     """Zwraca wybrany format znacznika czasu (offset_only / clock_only / hybrid)."""
-    return str(load_user_settings().get("timestamp_format", "clock_only"))
+    fmt = str(load_user_settings().get("timestamp_format", "clock_only"))
+    # Zakresy offsetowe [MM:SS - MM:SS] zostały wycofane: zapisane ustawienie "offset_only" daje godzinę startu
+    return "clock_only" if fmt == "offset_only" else fmt
 
 
 def get_custom_keywords() -> str:

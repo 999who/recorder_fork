@@ -207,9 +207,8 @@ class AppearanceTab(QWidget):
 
         self.combo_timestamp_format = QComboBox()
         self.combo_timestamp_format.setObjectName("combo_timestamp_format")
-        self.combo_timestamp_format.addItem("Tylko offset [00:12 - 00:18]", "offset_only")
-        self.combo_timestamp_format.addItem("Offset + Godzina realna [00:12 | 13:47:12]", "offset+clock")
         self.combo_timestamp_format.addItem("Godzina startu [13:47:12] (Domyślne)", "clock_only")
+        self.combo_timestamp_format.addItem("Offset + Godzina realna [00:12 | 13:47:12]", "offset+clock")
         ts_row.addWidget(self.combo_timestamp_format, stretch=1)
         view_layout.addLayout(ts_row)
 
