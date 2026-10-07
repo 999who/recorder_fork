@@ -1,5 +1,5 @@
 """
-Wrapper kompatybilności wstecznej dla projektu recorder67.
+Wrapper kompatybilności wstecznej dla projektu EMANAGER Signal.
 Projekt został podzielony na moduły:
 - recorder/config.py
 - recorder/core/ (vad.py, transcriber.py, parakeet_engine.py)

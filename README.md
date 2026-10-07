@@ -1,4 +1,4 @@
-# 🎙️ Recorder67 - Asystent Biurowy Ambient AI
+# 🎙️ EMANAGER Signal - Asystent Biurowy Ambient AI
 
 Nowoczesny system ciągłego monitorowania mowy w biurze, lokalnej transkrypcji AI (offline), detekcji aktywności głosu (VAD) oraz asynchronicznej synchronizacji z systemem CRM / bazą Supabase.
 
@@ -87,7 +87,7 @@ Gotowy plik `.exe` wraz ze wszystkimi zależnościami zostanie utworzony w katal
 ## 📁 Struktura Projektu
 
 ```text
-recorder67/
+recorder_fork/
 ├── .github/workflows/          # CI/CD GitHub Actions (automatyczny build Windows EXE i publikacja wydań)
 │   └── release.yml
 ├── main.py                     # Główny punkt startowy aplikacji

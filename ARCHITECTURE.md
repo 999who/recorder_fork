@@ -1,4 +1,4 @@
-# Architektura Systemu EMANAGER Signal (Recorder67)
+# Architektura Systemu EMANAGER Signal
 
 ## 1. Przegląd Architektury i Przepływu Audio
 

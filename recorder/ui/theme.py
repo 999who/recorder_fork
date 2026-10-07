@@ -1,5 +1,5 @@
 """
-Centralny silnik motywów i personalizacji wizualnej dla aplikacji Recorder67.
+Centralny silnik motywów i personalizacji wizualnej dla aplikacji EMANAGER Signal.
 
 Obsługuje:
 1. Rejestr 4 motywów wizualnych (classic_dark, classic_light, emanager_dark, emanager_light).

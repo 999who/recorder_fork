@@ -1,5 +1,5 @@
 """
-Moduł automatycznych aktualizacji (Auto-Updater) z GitHub Releases dla recorder67.
+Moduł automatycznych aktualizacji (Auto-Updater) z GitHub Releases dla EMANAGER Signal.
 Obsługuje sprawdzanie wydań stabilnych i pre-release (alpha/beta), asynchroniczne pobieranie
 oraz automatyczną podmianę plików aplikacji (in-place update) na Windowsie.
 """
@@ -90,7 +90,7 @@ def fetch_all_releases(
     """
     url = f"https://api.github.com/repos/{repo}/releases"
     headers = {
-        "User-Agent": f"Recorder67-App/{APP_VERSION}",
+        "User-Agent": f"EMANAGER-Signal/{APP_VERSION}",
         "Accept": "application/vnd.github.v3+json"
     }
     github_token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
@@ -321,7 +321,7 @@ class DownloadUpdateWorker(QThread):
         
         try:
             self.progress_signal.emit(5, "Nawiązywanie połączenia z serwerem wydań GitHub...")
-            headers = {"User-Agent": f"Recorder67-App/{APP_VERSION}"}
+            headers = {"User-Agent": f"EMANAGER-Signal/{APP_VERSION}"}
             token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
             if token:
                 headers["Authorization"] = f"Bearer {token}"
@@ -527,7 +527,7 @@ catch {{
 
     restart_cmd_bat = f'start "" "{exe_path}"' if restart_after else 'rem Brak restartu (aktualizacja przy wyjsciu)'
     bat_content = f'''@echo off
-rem Skrypt nadrzędny podmiany plików Recorder67 z automatycznym fallbackiem
+rem Skrypt nadrzędny podmiany plików EMANAGER Signal z automatycznym fallbackiem
 echo [UPDATER] Uruchamianie graficznego instalatora PowerShell...
 powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{updater_ps1}"
 if not errorlevel 1 goto cleanup_exit

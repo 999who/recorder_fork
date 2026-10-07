@@ -1,5 +1,5 @@
 """
-Moduł synchronizacji chmurowej dla recorder67 (Agnostic Cloud Sync).
+Moduł synchronizacji chmurowej dla EMANAGER Signal (Agnostic Cloud Sync).
 Odpowiada za asynchroniczne wysyłanie transkrypcji i metadanych spotkań
 do bazy Supabase (REST API) lub zewnętrznego Webhooka (klienci B2B / n8n / CRM).
 Obsługuje automatyczną kolejkę offline (odporność na brak internetu).

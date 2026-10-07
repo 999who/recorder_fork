@@ -1,12 +1,12 @@
 ---
 name: release-workflow
 description: >-
-  Kompletna procedura przygotowania, weryfikacji i publikacji nowego wydania aplikacji recorder67.
+  Kompletna procedura przygotowania, weryfikacji i publikacji nowego wydania aplikacji EMANAGER Signal.
   Używaj tego skilla za każdym razem, gdy użytkownik planuje nowe wydanie (zarówno duże ze scalaniem
   wielu gałęzi, jak i małe z pojedynczego brancha) oraz do redagowania opisu Release Notes na GitHubie.
 ---
 
-# Procedura Wydania (Release Workflow) - recorder67
+# Procedura Wydania (Release Workflow) - EMANAGER Signal
 
 ## Krok 1: Przygotowanie gałęzi
 * Upewnij się, że gałąź bazowa `master` jest zsynchronizowana z `origin/master`.
@@ -67,5 +67,5 @@ Wersja **vX.Y.Z** wprowadza [zwięzłe podsumowanie głównego celu wydania w 1-
 ### Poprawki błędów i usprawnienia
 * **Opis naprawionego zachowania:** Co wcześniej nie działało lub zachowywało się niepoprawnie, a teraz działa prawidłowo.
 
-**Pełna lista zmian:** <https://github.com/lukaszziarnecki/recorder67/compare/vPoprzednia...vX.Y.Z>
+**Pełna lista zmian:** <https://github.com/999who/recorder_fork/compare/vPoprzednia...vX.Y.Z>
 ```

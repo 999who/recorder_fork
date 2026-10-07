@@ -1,5 +1,5 @@
 """
-Moduł interfejsu graficznego PySide6 dla aplikacji Recorder67.
+Moduł interfejsu graficznego PySide6 dla aplikacji EMANAGER Signal.
 """
 
 from .window import SmartDictaphoneWindow

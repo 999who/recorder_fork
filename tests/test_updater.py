@@ -351,3 +351,11 @@ if __name__ == "__main__":
     test_sanitize_changelog_markdown_fixes_urls_and_strips_css()
     test_markdown_changelog_browser_copy_and_link_rendering(_app)
     print("\n[OK] Wszystkie testy modulu Auto-Updatera zakonczone sukcesem!")
+
+
+def test_updater_checks_releases_of_the_fork():
+    """Aktualizacje muszą pochodzić z repozytorium EMANAGER Signal, a nie z upstreamu recorder67."""
+    from recorder.config import GITHUB_REPO
+    from recorder.core import updater
+    assert GITHUB_REPO == "999who/recorder_fork"
+    assert updater.fetch_all_releases.__defaults__[0] == "999who/recorder_fork"

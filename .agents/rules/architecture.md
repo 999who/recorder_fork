@@ -1,4 +1,4 @@
-# 🧭 RECORDER67 — ARCHITEKTURA, MAPA POWIĄZAŃ I KONTRAKTY SYSTEMU
+# 🧭 EMANAGER SIGNAL — ARCHITEKTURA, MAPA POWIĄZAŃ I KONTRAKTY SYSTEMU
 
 > **DLA AGENTA AI:** Niniejszy plik jest ładowany na początku każdej sesji i nowego czatu. Zawiera kompletną mapę powiązań komponentów, przepływ danych oraz żelazne reguły architektoniczne (*invariants*), których **nie wolno łamać** przy wprowadzaniu nowych funkcji i refaktoryzacji.
 

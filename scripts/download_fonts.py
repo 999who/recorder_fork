@@ -53,7 +53,7 @@ def download_and_verify() -> bool:
         try:
             req = urllib.request.Request(
                 meta["url"],
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recorder67/FontDownloader"}
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EMANAGER-Signal/FontDownloader"}
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = resp.read()

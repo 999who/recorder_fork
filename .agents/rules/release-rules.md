@@ -1,4 +1,4 @@
-﻿# Reguły Przygotowania Wydań i Bezpieczeństwa (recorder67)
+﻿# Reguły Przygotowania Wydań i Bezpieczeństwa (EMANAGER Signal)
 
 ## 1. Świadoma Ocena Dokumentacji Przed Wydaniem
 * Przed utworzeniem taga wydania (`git tag v*`) agent ma obowiązek ocenić zakres zmian w wydaniu:
