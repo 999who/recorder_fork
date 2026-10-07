@@ -48,8 +48,15 @@ jobs:
       - name: Create Release ZIP Archive
         shell: pwsh
         run: |
-          $rawVersion = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "latest" }
-          $version = $rawVersion -replace '[/\\:]', '-'
+          # Tag wydania: z wypchniętego taga v*, a przy ręcznym uruchomieniu (Run workflow) z APP_VERSION w recorder/config.py
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $tag = $env:GITHUB_REF_NAME
+          } else {
+            $m = Select-String -Path "recorder/config.py" -Pattern '^APP_VERSION\s*=\s*"([^"]+)"' | Select-Object -First 1
+            $tag = "v" + $m.Matches[0].Groups[1].Value
+          }
+          echo "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+          $version = $tag -replace '[/\\:]', '-'
           $zipName = "EMANAGER-Signal-$version-Windows.zip"
           Compress-Archive -Path "dist/EMANAGER-Signal/*" -DestinationPath $zipName -Force
           Write-Host "Utworzono paczke zip: $zipName"
@@ -72,11 +79,13 @@ jobs:
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Release ${{ env.RELEASE_TAG }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, 'alpha') || contains(env.RELEASE_TAG, 'beta') }}
           generate_release_notes: true
           files: ${{ env.ZIP_NAME }}
 
