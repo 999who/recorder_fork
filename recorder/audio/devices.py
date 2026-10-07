@@ -426,3 +426,96 @@ class TargetAppAudioMonitor:
 
         return max_peak > 0.0005
 
+
+
+class OutputActivityProbe:
+    """
+    Szczytowy poziom sygnału na każdym aktywnym wyjściu audio Windows (Core Audio, IAudioMeterInformation).
+
+    Pozwala sprawdzić, na które urządzenie faktycznie gra dźwięk (np. rozmowa w Google Meet), bez otwierania
+    strumieni PortAudio. Lista wyjść jest odświeżana co REFRESH_SEC, więc widać też urządzenia podłączone
+    w trakcie nagrania (słuchawki Bluetooth, tryb zestawu słuchawkowego podczas rozmowy).
+    Wywoływać z wątku, który wykonał CoInitialize.
+    """
+    REFRESH_SEC = 5.0
+
+    def __init__(self):
+        import time
+        self.time = time
+        self._meters: List[Any] = []  # (czysta nazwa wyjścia, IAudioMeterInformation)
+        self._last_refresh = 0.0
+        self.available = HAS_PYCAW
+
+    def _refresh(self):
+        self._last_refresh = self.time.time()
+        meters = []
+        try:
+            import comtypes
+            from pycaw.pycaw import IAudioMeterInformation, IMMDeviceEnumerator
+            from pycaw.constants import CLSID_MMDeviceEnumerator
+            enumerator = comtypes.CoCreateInstance(
+                CLSID_MMDeviceEnumerator, IMMDeviceEnumerator, comtypes.CLSCTX_INPROC_SERVER
+            )
+            collection = enumerator.EnumAudioEndpoints(0, 1)  # eRender, DEVICE_STATE_ACTIVE
+            for i in range(collection.GetCount()):
+                try:
+                    dev = collection.Item(i)
+                    name = clean_device_name(str(AudioUtilities.CreateDevice(dev).FriendlyName or ""))
+                    iface = dev.Activate(IAudioMeterInformation._iid_, comtypes.CLSCTX_ALL, None)
+                    meters.append((name, iface.QueryInterface(IAudioMeterInformation)))
+                except Exception:
+                    continue
+        except Exception as e:
+            print(f"[OutputActivityProbe] Nie udało się odczytać listy wyjść audio: {e}")
+            self.available = False
+        self._meters = meters
+
+    def peaks(self) -> Dict[str, float]:
+        """Mapa {nazwa wyjścia: szczyt 0..1} dla aktywnych wyjść (pusta, gdy pycaw/Core Audio niedostępne)."""
+        if not self.available:
+            return {}
+        if not self._meters or (self.time.time() - self._last_refresh) > self.REFRESH_SEC:
+            self._refresh()
+        out: Dict[str, float] = {}
+        stale = False
+        for name, meter in self._meters:
+            try:
+                out[name] = max(out.get(name, 0.0), float(meter.GetPeakValue()))
+            except Exception:
+                stale = True
+        if stale:
+            self._last_refresh = 0.0
+        return out
+
+
+def output_peak(peaks: Dict[str, float], device_name: str) -> Optional[float]:
+    """Szczyt sygnału wyjścia o podanej nazwie (nazwy PortAudio i Core Audio porównywane po oczyszczeniu)."""
+    target = clean_device_name(device_name or "")
+    if not target:
+        return None
+    if target in peaks:
+        return peaks[target]
+    for name, val in peaks.items():
+        if name and (name.startswith(target) or target.startswith(name)):
+            return val
+    return None
+
+
+def pick_louder_output(peaks: Dict[str, float], current_name: str,
+                       silent_below: float = 0.002, active_above: float = 0.02) -> Optional[str]:
+    """
+    Zwraca nazwę innego wyjścia, na którym gra dźwięk, gdy nagrywane wyjście milczy (inaczej None).
+    Przykład: nagrywamy „Głośniki”, a Google Meet gra na „Słuchawki (Bluetooth)”.
+    """
+    cur = output_peak(peaks, current_name)
+    if cur is not None and cur >= silent_below:
+        return None
+    target = clean_device_name(current_name or "")
+    best_name, best_val = None, active_above
+    for name, val in peaks.items():
+        if name == target or val < best_val:
+            continue
+        if target and (name.startswith(target) or target.startswith(name)):
+            continue
+        best_name, best_val = name, val
+    return best_name

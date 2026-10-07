@@ -17,7 +17,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QPainter, QPen, QFont
 from PySide6.QtWidgets import (
     QWidget, QFrame, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
-    QGraphicsDropShadowEffect, QListWidget, QListWidgetItem, QMenu, QSizePolicy
+    QGraphicsDropShadowEffect, QListWidget, QListWidgetItem, QMenu, QSizePolicy, QLineEdit
 )
 
 from recorder.ui.icons import make_icon
@@ -1058,3 +1058,128 @@ class RowFadeIn(QWidget):
         c.setAlphaF(self._opacity)
         p.fillRect(self.rect(), c)
         p.end()
+
+
+class SpeakerNamesPopover(QFrame):
+    """
+    Wysuwane spod paska źródeł okienko „Podpisy w transkrypcji”: nazwy mówców dla mikrofonu
+    (lub kanałów odbiornika wielokanałowego) i dźwięku systemu, edytowane bez otwierania Ustawień.
+
+    channels: lista (kanał, opis źródła, nazwa domyślna, bieżąca nazwa), np. ("mic", "Mikrofon", "Mikrofon", "Gleb").
+    Po „Zapisz” (lub Enter) emituje names_saved z mapą {kanał: nowa nazwa} (pusta nazwa = domyślna).
+    """
+
+    names_saved = Signal(dict)
+    settings_requested = Signal()
+
+    MAX_NAME_LEN = 40
+
+    def __init__(self, channels, parent: Optional[QWidget] = None, hint: str = ""):
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
+                         | Qt.WindowType.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(14, 8, 14, 18)  # miejsce na cień pod kartą
+
+        card = QFrame(self)
+        card.setObjectName("SpeakerNamesCard")
+        outer.addWidget(card)
+        shadow = QGraphicsDropShadowEffect(card)
+        shadow.setBlurRadius(28)
+        shadow.setOffset(0, 8)
+        shadow.setColor(QColor(0, 0, 0, 120))
+        card.setGraphicsEffect(shadow)
+
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(10)
+
+        title = QLabel("PODPISY W TRANSKRYPCJI", card)
+        title.setObjectName("SpeakerNamesTitle")
+        lay.addWidget(title)
+
+        t = current_tokens()
+        from recorder.config import get_speaker_colors, get_theme
+        colors = get_speaker_colors(get_theme())
+        self._edits = {}
+        for channel, source_label, default_name, current_name in channels:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            dot = QLabel(card)
+            dot.setFixedSize(8, 8)
+            dot.setStyleSheet(f"background-color: {colors.get(channel, colors.get('mic', t.accent))}; border-radius: 4px;")
+            row.addWidget(dot)
+            icon = QLabel(card)
+            icon.setFixedSize(16, 16)
+            icon.setPixmap(make_icon("headphones" if channel == "system" else "mic", t.text_secondary, 16).pixmap(16, 16))
+            row.addWidget(icon)
+            lbl = QLabel(source_label, card)
+            lbl.setObjectName("SpeakerNamesSource")
+            lbl.setFixedWidth(108)
+            row.addWidget(lbl)
+            edit = QLineEdit(card)
+            edit.setObjectName("SpeakerNameEdit")
+            edit.setPlaceholderText(default_name)
+            edit.setMaxLength(self.MAX_NAME_LEN)
+            edit.setMinimumWidth(190)
+            edit.setClearButtonEnabled(True)
+            edit.setToolTip(f"Nazwa przy wypowiedziach ze źródła „{source_label}”. Puste pole = „{default_name}”.")
+            if current_name and current_name != default_name:
+                edit.setText(current_name)
+            edit.returnPressed.connect(self._save)
+            row.addWidget(edit, stretch=1)
+            lay.addLayout(row)
+            self._edits[channel] = edit
+
+        if hint:
+            lbl_hint = QLabel(hint, card)
+            lbl_hint.setObjectName("SpeakerNamesHint")
+            lbl_hint.setWordWrap(True)
+            lay.addWidget(lbl_hint)
+
+        footer = QHBoxLayout()
+        footer.setSpacing(8)
+        self.btn_settings = QPushButton("Źródła dźwięku…", card)
+        self.btn_settings.setObjectName("SpeakerNamesLink")
+        self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_settings.setToolTip("Wybór mikrofonu, wyjścia i trybu nagrywania (Ustawienia → Nagrywanie)")
+        self.btn_settings.clicked.connect(self._open_settings)
+        footer.addWidget(self.btn_settings)
+        footer.addStretch(1)
+        self.btn_save = QPushButton("Zapisz", card)
+        self.btn_save.setObjectName("BtnPrimary")
+        self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_save.setDefault(True)
+        self.btn_save.clicked.connect(self._save)
+        footer.addWidget(self.btn_save)
+        lay.addLayout(footer)
+
+    def names(self) -> dict:
+        return {ch: " ".join(e.text().split()) for ch, e in self._edits.items()}
+
+    def edit_for(self, channel: str) -> Optional[QLineEdit]:
+        return self._edits.get(channel)
+
+    def show_below(self, anchor: QWidget) -> None:
+        """Pokazuje okienko pod kotwicą (lewe krawędzie karty i przycisku w jednej linii) i ustawia fokus na 1. polu."""
+        self.adjustSize()
+        m = self.layout().contentsMargins()
+        pos = anchor.mapToGlobal(QPoint(-m.left(), anchor.height() + 6 - m.top()))
+        screen = anchor.screen().availableGeometry() if anchor.screen() else None
+        if screen is not None:
+            pos.setX(max(screen.left(), min(pos.x(), screen.right() - self.width())))
+        self.move(pos)
+        self.show()
+        first = next(iter(self._edits.values()), None)
+        if first is not None:
+            first.setFocus()
+            first.selectAll()
+
+    def _save(self) -> None:
+        self.names_saved.emit(self.names())
+        self.close()
+
+    def _open_settings(self) -> None:
+        self.close()
+        self.settings_requested.emit()

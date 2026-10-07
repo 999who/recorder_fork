@@ -1720,6 +1720,37 @@ def generate_theme_qss(
     QPushButton#CloudToastBtn:hover {{
         background-color: {t.bg_hover};
     }}
+    QFrame#SpeakerNamesCard {{
+        background-color: {t.bg_elevated};
+        border: 1px solid {t.border};
+        border-radius: 12px;
+    }}
+    QLabel#SpeakerNamesTitle {{
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        color: {t.text_muted};
+    }}
+    QLabel#SpeakerNamesSource {{
+        font-size: 12px;
+        color: {t.text_secondary};
+    }}
+    QLabel#SpeakerNamesHint {{
+        font-size: 11px;
+        color: {t.text_muted};
+    }}
+    QPushButton#SpeakerNamesLink {{
+        background: transparent;
+        border: none;
+        padding: 4px 0px;
+        color: {t.text_secondary};
+        font-size: 12px;
+        text-align: left;
+    }}
+    QPushButton#SpeakerNamesLink:hover {{
+        color: {t.text_primary};
+        text-decoration: underline;
+    }}
     QFrame#HistoryPanel {{
         background-color: {t.bg_elevated};
         border: none;

@@ -18,7 +18,7 @@ from recorder.config import (
     is_adaptive_beam_size,
     get_theme,
     get_speaker_colors,
-    get_mic_channel_names,
+    get_channel_speaker_name,
 )
 
 
@@ -346,12 +346,8 @@ class RollingTranscriptionWorker(QThread):
 
     @staticmethod
     def _default_speaker_for_channel(channel: str) -> str:
-        """Nazwa mówcy przypisana do kanału: w trybie stereo lewy/prawy kanał mikrofonu to dwie nazwane osoby."""
-        if channel in ("mic1", "mic2", "mic3", "mic4"):
-            return get_mic_channel_names()[int(channel[3]) - 1]
-        if channel == "mic":
-            return "Mikrofon"
-        return "Dźwięk Systemu"
+        """Nazwa mówcy przypisana do kanału (nazwy zmienia się w Ustawieniach lub z paska źródeł na ekranie głównym)."""
+        return get_channel_speaker_name(channel)
 
     def _dedupe_overlap(self, block: "RollingBlock", words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Usuwa dubel słów na styku bloków z nakładką (patrz OverlapDeduper)."""

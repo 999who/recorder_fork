@@ -28,11 +28,14 @@ from recorder.config import (
     get_system_vad_speech_threshold,
     get_vad_speech_threshold,
     get_silence_alert_seconds,
-    get_session_split_silence_sec
+    get_session_split_silence_sec,
+    load_user_settings,
 )
 from recorder.audio.capture import save_wav_file, StreamingWavWriter
 from recorder.audio.converter import resample_to_16k, prepare_audio_file
-from recorder.audio.devices import HAS_PYAUDIOWPATCH, TargetAppAudioMonitor, clean_device_name
+from recorder.audio.devices import (
+    HAS_PYAUDIOWPATCH, TargetAppAudioMonitor, OutputActivityProbe, clean_device_name, output_peak, pick_louder_output
+)
 from recorder.core.vad import SileroVADDetector, is_silero_available
 from recorder.core.blocks import should_cut_block
 from recorder.core.asr_engine import create_asr_engine
@@ -174,6 +177,16 @@ class RealtimeAudioMixer:
             stereo[:, 1] = s_part
             int16_arr = (stereo * 32767.0).clip(-32768, 32767).astype(np.int16)
             return int16_arr.tobytes()
+
+
+def _pinned_output_name() -> str:
+    """Nazwa wyjścia wybranego ręcznie w Ustawieniach (indeksy PortAudio zmieniają się po podłączeniu urządzeń)."""
+    try:
+        label = str(load_user_settings().get("loopback_device_label", "") or "")
+    except Exception:
+        return ""
+    label = label.replace("🎧", "").replace("(Domyślne)", "").replace("(domyślne)", "").strip()
+    return clean_device_name(label)
 
 
 class SmartAudioWorker(QThread):
@@ -683,6 +696,11 @@ class SmartAudioWorker(QThread):
         p_audio = None
         loop_stream = None
         mic_stream = None
+        loopback_dev = None
+        loopback_pinned = False      # wyjście wybrane ręcznie w Ustawieniach (nie podążamy za aktywnym wyjściem)
+        loopback_pinned_name = ""
+        sys_native_sr, sys_channels = 48000, 2
+        last_loop_chunk_time = time.time()
 
         if HAS_PYAUDIOWPATCH and (run_mic or run_sys):
             try:
@@ -702,6 +720,21 @@ class SmartAudioWorker(QThread):
                             loopback_dev = dev_cand
                     except Exception:
                         pass
+                    # Zapisany indeks mógł się przesunąć (inne urządzenia podłączone niż przy wyborze w Ustawieniach):
+                    # wtedy szukamy wybranego wyjścia po nazwie, a gdy go nie ma - nagrywamy domyślne.
+                    want = _pinned_output_name()
+                    got = clean_device_name(loopback_dev.get("name", "")) if loopback_dev else ""
+                    if want and got != want:
+                        loopback_dev = None
+                        for cand in p_audio.get_loopback_device_info_generator():
+                            if clean_device_name(cand.get("name", "")) == want:
+                                loopback_dev = cand
+                                break
+                        if loopback_dev is None:
+                            print(f"[SmartAudioWorker] Wybrane wyjście '{want}' jest niedostępne - nagrywam domyślne wyjście.")
+                    if loopback_dev is not None:
+                        loopback_pinned = True
+                        loopback_pinned_name = clean_device_name(loopback_dev.get("name", ""))
                 if not loopback_dev:
                     try:
                         loopback_dev = p_audio.get_default_wasapi_loopback()
@@ -832,12 +865,16 @@ class SmartAudioWorker(QThread):
                                 stream_callback=loopback_callback
                             )
                             loop_stream.start_stream()
+                            print(f"[SmartAudioWorker] Dźwięk systemu: nagrywam wyjście '{loopback_dev.get('name')}' "
+                                  f"(idx {loopback_dev.get('index')}, {sys_native_sr} Hz, {sys_channels} kan.)")
                             break
                         except Exception as open_err:
                             if attempt < 2:
                                 time.sleep(0.3)
                             else:
                                 print(f"[SmartAudioWorker] Nie udało się otworzyć WASAPI Loopback po 3 próbach: {open_err}")
+                else:
+                    print("[SmartAudioWorker] Dźwięk systemu: brak urządzenia WASAPI Loopback - kanał systemu nie będzie nagrywany!")
             except Exception as e:
                 print(f"[SmartAudioWorker] Nie udało się otworzyć strumienia WASAPI Loopback: {e}")
 
@@ -1093,62 +1130,90 @@ class SmartAudioWorker(QThread):
 
             # Jeśli ponowne otwarcie na p_audio się nie powiodło (np. odłączenie odbiornika USB):
             print("[SmartAudioWorker WATCHDOG] Re-inicjalizacja instancji PyAudio po uśpieniu lub resecie USB...")
+            return _reinit_audio(target_name)
+
+        def _reinit_audio(mic_target_name="", loop_target_name=""):
+            """
+            Zamyka oba strumienie i tworzy nową instancję PyAudio. PortAudio zna tylko urządzenia obecne
+            w chwili inicjalizacji, więc tylko tak widać nowe wejścia/wyjścia (np. słuchawki Bluetooth).
+            Następnie otwiera mikrofon (po nazwie) i wyjście systemowe (po nazwie lub domyślne).
+            """
+            nonlocal mic_stream, loop_stream, p_audio, mic_dev_info, mic_sr, mic_ch, last_mic_chunk_time
+            nonlocal loopback_dev
+            for s_ in (mic_stream, loop_stream):
+                if s_ is None:
+                    continue
+                try:
+                    if s_.is_active():
+                        s_.stop_stream()
+                    s_.close()
+                except Exception:
+                    pass
+            mic_stream = None
+            loop_stream = None
+            loopback_dev = None  # indeksy urządzeń zmieniają się po re-inicjalizacji
             try:
-                if loop_stream is not None:
-                    try:
-                        if loop_stream.is_active():
-                            loop_stream.stop_stream()
-                        loop_stream.close()
-                    except Exception:
-                        pass
-                    loop_stream = None
                 p_audio.terminate()
             except Exception:
                 pass
             time.sleep(0.3)
+            mic_ok = not run_mic
             try:
                 p_audio = pyaudio.PyAudio()
-                new_dev = None
-                if target_name:
-                    c_val = p_audio.get_device_count()
-                    dev_cnt = c_val if isinstance(c_val, int) else 0
-                    for idx in range(dev_cnt):
-                        cand = p_audio.get_device_info_by_index(idx)
-                        if cand.get("maxInputChannels", 0) > 0 and not cand.get("isLoopbackDevice", False):
-                            if clean_device_name(cand.get("name", "")) == target_name:
-                                new_dev = cand
-                                break
-                if not new_dev:
-                    try:
-                        new_dev = p_audio.get_default_input_device_info()
-                    except Exception:
-                        pass
-                if new_dev:
-                    mic_dev_info = new_dev
-                    mic_sr = int(mic_dev_info.get("defaultSampleRate", 16000))
-                    mic_ch = max(1, int(mic_dev_info.get("maxInputChannels", 1)))
-                    new_s = p_audio.open(
-                        format=pyaudio.paInt16,
-                        channels=mic_ch,
-                        rate=mic_sr,
-                        input=True,
-                        input_device_index=mic_dev_info["index"],
-                        frames_per_buffer=1024,
-                        stream_callback=mic_callback
-                    )
-                    new_s.start_stream()
-                    if new_s.is_active():
-                        mic_stream = new_s
-                        last_mic_chunk_time = time.time()
-                        print(f"[SmartAudioWorker WATCHDOG] Mikrofon pomyślnie zreaktywowany po re-inicjalizacji: {mic_dev_info.get('name')}")
-                        if run_sys and not loop_stream:
-                            _reopen_loop_stream()
-                        return True
+                if run_mic:
+                    new_dev = None
+                    if mic_target_name:
+                        c_val = p_audio.get_device_count()
+                        dev_cnt = c_val if isinstance(c_val, int) else 0
+                        for idx in range(dev_cnt):
+                            cand = p_audio.get_device_info_by_index(idx)
+                            if cand.get("maxInputChannels", 0) > 0 and not cand.get("isLoopbackDevice", False):
+                                if clean_device_name(cand.get("name", "")) == mic_target_name:
+                                    new_dev = cand
+                                    break
+                    if not new_dev:
+                        try:
+                            new_dev = p_audio.get_default_input_device_info()
+                        except Exception:
+                            pass
+                    if new_dev:
+                        mic_dev_info = new_dev
+                        mic_sr = int(mic_dev_info.get("defaultSampleRate", 16000))
+                        mic_ch = max(1, int(mic_dev_info.get("maxInputChannels", 1)))
+                        new_s = p_audio.open(
+                            format=pyaudio.paInt16,
+                            channels=mic_ch,
+                            rate=mic_sr,
+                            input=True,
+                            input_device_index=mic_dev_info["index"],
+                            frames_per_buffer=1024,
+                            stream_callback=mic_callback
+                        )
+                        new_s.start_stream()
+                        if new_s.is_active():
+                            mic_stream = new_s
+                            last_mic_chunk_time = time.time()
+                            mic_ok = True
+                            print(f"[SmartAudioWorker WATCHDOG] Mikrofon pomyślnie zreaktywowany po re-inicjalizacji: {mic_dev_info.get('name')}")
             except Exception as re_init_err:
                 print(f"[SmartAudioWorker WATCHDOG] Błąd ponownej inicjalizacji PyAudio: {re_init_err}")
-            return False
+            # Wyjście systemowe otwieramy niezależnie od wyniku mikrofonu, inaczej kanał systemu zostałby martwy
+            if run_sys and p_audio is not None:
+                _reopen_loop_stream(loop_target_name)
+            return mic_ok
 
-        def _reopen_loop_stream():
+        def _find_loopback(name: str):
+            """Urządzenie WASAPI Loopback o podanej (oczyszczonej) nazwie wyjścia w bieżącej instancji PyAudio."""
+            try:
+                for cand in p_audio.get_loopback_device_info_generator():
+                    cn = clean_device_name(cand.get("name", ""))
+                    if cn and (cn == name or cn.startswith(name) or name.startswith(cn)):
+                        return cand
+            except Exception:
+                pass
+            return None
+
+        def _reopen_loop_stream(target_name=""):
             nonlocal loop_stream, p_audio, loopback_dev, sys_native_sr, sys_channels, last_loop_chunk_time
             print("[SmartAudioWorker WATCHDOG] Restartowanie strumienia WASAPI Loopback...")
             if loop_stream is not None:
@@ -1164,13 +1229,16 @@ class SmartAudioWorker(QThread):
                 loop_stream = None
 
             try:
-                def_l = None
-                try:
-                    def_l = p_audio.get_default_wasapi_loopback()
-                except Exception:
-                    pass
-                if def_l and (not loopback_dev or loopback_dev.get("index") != def_l.get("index")):
-                    loopback_dev = def_l
+                new_l = _find_loopback(target_name) if target_name else None
+                if new_l is None and not loopback_pinned:
+                    try:
+                        new_l = p_audio.get_default_wasapi_loopback()
+                    except Exception:
+                        pass
+                if new_l is None and loopback_dev is None and loopback_pinned_name:
+                    new_l = _find_loopback(loopback_pinned_name)
+                if new_l and (not loopback_dev or loopback_dev.get("index") != new_l.get("index")):
+                    loopback_dev = new_l
                     sys_native_sr = int(loopback_dev.get("defaultSampleRate", 48000))
                     sys_channels = int(loopback_dev.get("maxInputChannels", 2))
 
@@ -1193,6 +1261,15 @@ class SmartAudioWorker(QThread):
             except Exception as l_err:
                 print(f"[SmartAudioWorker WATCHDOG] Błąd restartu strumienia loopback: {l_err}")
             return False
+
+        # Kontrola, na które wyjście faktycznie gra dźwięk. Nagrywamy tylko jedno wyjście (domyślne z chwili startu
+        # albo wybrane w Ustawieniach); gdy rozmowa (np. Google Meet) gra na innym - słuchawkach Bluetooth, zestawie
+        # słuchawkowym w trybie rozmowy, wyjściu wybranym w samym Meet - kanał systemu milczał przez całe nagranie,
+        # a głos rozmówców trafiał tylko do mikrofonu z głośników. Teraz przełączamy się na grające wyjście.
+        output_probe = OutputActivityProbe() if (run_sys and p_audio is not None) else None
+        last_output_check = 0.0
+        other_output_active_sec = 0.0
+        warned_pinned_silent = False
 
         # Pętla monitorowania poziomów, stanu ciszy i strumieniowego zapisu zmiksowanego audio
         last_watchdog_check = time.time()
@@ -1240,7 +1317,12 @@ class SmartAudioWorker(QThread):
                             if not loop_stream.is_active():
                                 loop_failed = True
                             elif (now_tick - last_loop_chunk_time) > 4.0:
-                                loop_failed = True
+                                # WASAPI Loopback nie dostarcza danych, gdy na wyjściu nic nie gra - to normalna cisza.
+                                # Restartujemy tylko wtedy, gdy wyjście gra, a strumień milczy (lub nie da się tego sprawdzić).
+                                cur_peak = None
+                                if output_probe is not None and output_probe.available and loopback_dev:
+                                    cur_peak = output_peak(output_probe.peaks(), loopback_dev.get("name", ""))
+                                loop_failed = cur_peak is None or cur_peak >= 0.002
                         except Exception:
                             loop_failed = True
 
@@ -1255,6 +1337,35 @@ class SmartAudioWorker(QThread):
                                 pass
                             if not quick_l_ok:
                                 _reopen_loop_stream()
+
+                # Podążanie za wyjściem, na którym faktycznie gra dźwięk (co ~1 s)
+                if (output_probe is not None and output_probe.available and now_tick - last_output_check >= 1.0
+                        and self.state not in (SmartRecordState.STOPPED, SmartRecordState.MANUAL_PAUSED)
+                        and not self.sys_muted):
+                    step = now_tick - last_output_check if last_output_check else 1.0
+                    last_output_check = now_tick
+                    try:
+                        cur_name = loopback_dev.get("name", "") if loopback_dev else ""
+                        louder = pick_louder_output(output_probe.peaks(), cur_name)
+                    except Exception:
+                        louder = None
+                    other_output_active_sec = (other_output_active_sec + step) if louder else 0.0
+                    if louder and other_output_active_sec >= 2.0:
+                        other_output_active_sec = 0.0
+                        if loopback_pinned:
+                            if not warned_pinned_silent:
+                                warned_pinned_silent = True
+                                print(f"[SmartAudioWorker] UWAGA: wybrane w Ustawieniach wyjście '{loopback_pinned_name}' milczy, "
+                                      f"a dźwięk gra na '{louder}'. Kanał systemu nic nie nagra - wybierz 'Domyślne wyjście' "
+                                      f"albo właściwe urządzenie w Ustawienia → Nagrywanie.")
+                        else:
+                            print(f"[SmartAudioWorker] Dźwięk gra na innym wyjściu: '{louder}' "
+                                  f"(nagrywane: '{clean_device_name(cur_name)}'). Przełączam kanał systemu.")
+                            switched = _find_loopback(louder) is not None and _reopen_loop_stream(louder)
+                            if not switched:
+                                # Wyjście pojawiło się po starcie nagrania - PortAudio go nie zna, potrzebna re-inicjalizacja
+                                mic_name = clean_device_name(mic_dev_info.get("name", "")) if (run_mic and isinstance(mic_dev_info, dict)) else ""
+                                _reinit_audio(mic_name, louder)
 
                 # Emisja poziomów VU Meter
                 m_lvl = float(self.mic_level)

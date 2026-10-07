@@ -454,8 +454,8 @@ class SmartDictaphoneWindow(QMainWindow):
         self.btn_source_pill = QPushButton("")
         self.btn_source_pill.setObjectName("SourcePill")
         self.btn_source_pill.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_source_pill.setToolTip("Źródła dźwięku i model (Ustawienia → Nagrywanie)")
-        self.btn_source_pill.clicked.connect(lambda: self._open_settings_dialog(initial_tab="recording"))
+        self.btn_source_pill.setToolTip("Podpisy mówców (np. Twoje imię zamiast „Mikrofon”) i źródła dźwięku")
+        self.btn_source_pill.clicked.connect(self._open_speaker_names_popover)
         top_bar.addWidget(self.btn_source_pill)
         top_bar.addStretch(1)
 
@@ -763,6 +763,87 @@ class SmartDictaphoneWindow(QMainWindow):
         self.btn_source_pill.setText(text)
         self.btn_source_pill.setIcon(icon)
         self.btn_source_pill.setIconSize(QSize(34, 14) if mode == RecordSourceMode.HYBRID_DUAL else QSize(14, 14))
+
+    # ------------------------------------------------------------------
+    # Podpisy mówców edytowane z paska źródeł (bez otwierania Ustawień)
+    # ------------------------------------------------------------------
+    _SPEAKER_NAME_KEYS = {"mic": "mic_name", "system": "system_name",
+                          **{f"mic{i}": f"mic_name_{i}" for i in range(1, 5)}}
+
+    def _speaker_name_channels(self):
+        """Kanały widoczne w okienku podpisów: (kanał, opis źródła, nazwa domyślna, bieżąca nazwa)."""
+        from recorder.config import (
+            get_channel_speaker_name, is_mic_stereo_split, DEFAULT_MIC_NAME, DEFAULT_SYSTEM_NAME
+        )
+        from recorder.ui.workers import MAX_MIC_LANES
+        mode = get_record_source_mode()
+        rows = []
+        if mode != RecordSourceMode.SYSTEM_ONLY:
+            if is_mic_stereo_split():
+                lanes = int(getattr(self.worker, "_mic_lanes", 1) or 1) if self.is_recording() else 1
+                for i in range(1, (lanes if lanes > 1 else MAX_MIC_LANES) + 1):
+                    rows.append((f"mic{i}", f"Kanał {i}", f"Osoba {i}", get_channel_speaker_name(f"mic{i}")))
+            else:
+                rows.append(("mic", "Mikrofon", DEFAULT_MIC_NAME, get_channel_speaker_name("mic")))
+        if mode != RecordSourceMode.MIC_ONLY:
+            rows.append(("system", "Dźwięk systemu", DEFAULT_SYSTEM_NAME, get_channel_speaker_name("system")))
+        return rows
+
+    def _open_speaker_names_popover(self) -> None:
+        from recorder.ui.widgets import SpeakerNamesPopover
+        hint = ("Zmiana obejmie też bieżące nagranie." if self.is_recording()
+                else "Puste pole = nazwa domyślna.")
+        pop = SpeakerNamesPopover(self._speaker_name_channels(), self, hint=hint)
+        pop.names_saved.connect(self._apply_speaker_names)
+        pop.settings_requested.connect(lambda: self._open_settings_dialog(initial_tab="recording"))
+        self._speaker_names_popover = pop
+        pop.show_below(self.btn_source_pill)
+
+    def _apply_speaker_names(self, names: dict) -> None:
+        """Zapisuje nowe podpisy kanałów i przemianowuje wypowiedzi bieżącego nagrania."""
+        from recorder.config import get_channel_speaker_name
+        names = {ch: v for ch, v in (names or {}).items() if ch in self._SPEAKER_NAME_KEYS}
+        if not names:
+            return
+        before = {ch: get_channel_speaker_name(ch) for ch in names}
+        save_user_settings({self._SPEAKER_NAME_KEYS[ch]: v for ch, v in names.items()})
+        renamed = {}
+        for ch in names:
+            new_name = get_channel_speaker_name(ch)
+            if new_name != before[ch]:
+                renamed[ch] = (before[ch], new_name)
+        if not renamed:
+            return
+        logger.info(f"[PODPISY] Zmieniono podpisy kanałów: {renamed}")
+        if self.is_recording():
+            self._relabel_live_turns(renamed)
+        self._set_cloud_status("Zapisano podpisy mówców.", "info")
+
+    def _relabel_live_turns(self, renamed: dict) -> None:
+        """Podmienia nazwę mówcy w wypowiedziach bieżącej sesji, które nosiły dotychczasowy podpis kanału."""
+        rw = getattr(self, "rolling_worker", None)
+        seen = set()
+        for turns in (getattr(rw, "all_turns", None) or [], self.current_turns or []):
+            for t in list(turns):
+                if id(t) in seen or not isinstance(t, dict):
+                    continue
+                seen.add(id(t))
+                pair = renamed.get(t.get("channel", "mic"))
+                if pair and t.get("speaker") == pair[0]:
+                    t["speaker"] = pair[1]
+        if rw is None:
+            return
+        try:
+            html, plain, turns = rw._compile_full_transcript()
+            rw._cached_html, rw._cached_plain = html, plain
+            self.current_turns = turns
+            self.last_plain_text = plain
+            if turns:
+                self.text_transcript.setHtml(html)
+                self._scroll_transcript_view()
+                self._apply_live_slot()
+        except Exception as e:
+            logger.warning(f"Nie udało się odświeżyć podglądu po zmianie podpisów: {e}")
 
     def _apply_source_mode_to_ui(self) -> None:
         mode = get_record_source_mode()
