@@ -1,3 +1,12 @@
+## [v2.0.1]: Podpisy mówców z ekranu głównego, poprawne nagrywanie dźwięku systemu
+
+- Kliknięcie paska źródeł na ekranie głównym otwiera okienko „Podpisy w transkrypcji”: własna nazwa zamiast „Mikrofon” / „Dźwięk Systemu” (także dla kanałów odbiornika wielokanałowego), działa też w trakcie nagrania.
+- Poprawka: kanał systemu nagrywał tylko wyjście domyślne z chwili startu. Gdy rozmowa (np. Google Meet) grała na innym wyjściu (słuchawki Bluetooth, zestaw słuchawkowy w trybie rozmowy), wszystko trafiało do mikrofonu. Teraz nagrywanie przełącza się na wyjście, na którym faktycznie gra dźwięk.
+- Wyjście wybrane w Ustawieniach jest odnajdywane po nazwie, a nie po indeksie, który zmieniał się po podłączeniu urządzeń; w logu widać, które wyjście jest nagrywane.
+- Aktualizacje pobierane z repozytorium 999who/recorder_fork.
+
+---
+
 ## [v2.0]: EMANAGER Signal, silnik Parakeet, wiele mikrofonów
 
 - Nowa nazwa aplikacji **EMANAGER Signal** i nowe logo (exe `EMANAGER-Signal.exe`, identyfikator Windows `EMANAGER.Signal`). Instalacje o starej nazwie trzeba zainstalować ponownie ręcznie.

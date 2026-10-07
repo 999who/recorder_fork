@@ -41,6 +41,7 @@ graph TD
 ## 3. Status Realizacji: Co jest ZROBIONE vs Roadmapa
 
 ### ✅ ZROBIONE (Stan obecny w repozytorium):
+- [x] **Podpisy mówców i wybór wyjścia (v2.0.1)**: nazwy kanałów edytowane z paska źródeł na ekranie głównym; kanał dźwięku systemu podąża za wyjściem, na którym gra rozmowa.
 - [x] **Aplikacja Desktopowa GUI (PySide6)**: Nowoczesny interfejs, wskaźniki VU meter poziomu głośności, zegar nagrywania, zarządzanie plikami nagrań i transkrypcji.
 - [x] **Silero VAD (Voice Activity Detection)**: Detekcja mowy AI w czasie rzeczywistym, pre-padding zapobiegający ucinaniu słów, regulacja progu ciszy i auto-wznawianie.
 - [x] **Asynchroniczna Transkrypcja na Żywo (Rolling Transcriber)**: Silnik `faster-whisper` (`small`, `medium`, `large-v3-turbo`) przetwarzający bloki mowy w tle, z automatycznym doborem akceleracji CUDA `float16` lub CPU `int8`.

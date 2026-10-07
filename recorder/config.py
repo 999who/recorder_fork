@@ -20,7 +20,7 @@ os.makedirs(TRANSCRIPTIONS_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Wersja aplikacji i repozytorium GitHub
-APP_VERSION = "2.0"
+APP_VERSION = "2.0.1"
 GITHUB_REPO = "999who/recorder_fork"
 
 # Parametry audio i VAD
