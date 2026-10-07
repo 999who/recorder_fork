@@ -83,6 +83,21 @@ class RollingTranscriptionWorker(QThread):
         self._cached_html: str = ""
         self._cached_plain: str = ""
         self._cached_session: Optional[Any] = None
+        # Przesunięcie osi czasu przy kontynuacji nagrania z tego dnia (bloki liczone od 0 w nowym Starcie)
+        self.time_offset_sec: float = 0.0
+
+    def preload_session(self, turns: List[Dict[str, Any]], words: Optional[List[Dict[str, Any]]] = None,
+                        offset_sec: float = 0.0):
+        """
+        Kontynuacja nagrania z tego dnia: wcześniejsze wypowiedzi zostają w transkrypcji i pliku sesji,
+        a nowe bloki dostają czasy liczone od końca dotychczasowego nagrania.
+        """
+        self.all_turns = [dict(t) for t in (turns or []) if isinstance(t, dict)]
+        self._all_words = [dict(w) for w in (words or []) if isinstance(w, dict)]
+        self.time_offset_sec = max(0.0, float(offset_sec or 0.0))
+        self.total_processed_seconds = self.time_offset_sec
+        self.latest_session_seconds = self.time_offset_sec
+        self._cached_html = ""
 
     @property
     def completed_blocks(self) -> List[Dict[str, Any]]:
@@ -96,6 +111,8 @@ class RollingTranscriptionWorker(QThread):
     def add_block(self, block_index: int, start_sec: float, end_sec: float, audio_float: np.ndarray, channel_source: str = "mic"):
         """Dodaje nowy zamknięty blok audio do kolejki przetwarzania w tle z oznaczeniem źródła (mic / system)."""
         if self._is_running:
+            start_sec = float(start_sec) + self.time_offset_sec
+            end_sec = float(end_sec) + self.time_offset_sec
             block = RollingBlock(block_index, start_sec, end_sec, audio_float, channel_source=channel_source)
             from datetime import timedelta
             now_dt = datetime.now()
@@ -136,6 +153,9 @@ class RollingTranscriptionWorker(QThread):
         """Zgłasza zakończenie nagrywania i zamyka kolejkę po przetworzeniu ewentualnego ostatniego bloku."""
         self._is_running = False
         if final_block:
+            if self.time_offset_sec:
+                final_block.start_sec += self.time_offset_sec
+                final_block.end_sec += self.time_offset_sec
             self.block_queue.put(final_block)
         self.block_queue.put(None)
 

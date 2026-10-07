@@ -42,6 +42,7 @@ from recorder.config import (
     get_target_app_filter,
     get_silence_alert_seconds,
     get_session_split_silence_sec,
+    is_one_record_per_day,
     is_auto_check_updates_startup,
     is_always_on_top,
     is_minimize_to_tray_on_close,
@@ -1268,21 +1269,41 @@ class SmartDictaphoneWindow(QMainWindow):
         self.text_transcript.clear()
         self.progress_transcription.setValue(0)
 
-        # Timestamp z mikrosekundami — zapobiega kolizji UUID5 przy szybkim Stop→Start w tej samej sekundzie
+        # Jedno nagranie na dzień: Start po Stop tego samego dnia kontynuuje dzisiejsze nagranie
         now = datetime.now()
-        self.session_start_time = now
-        timestamp = now.strftime("%Y%m%d_%H%M%S_%f")
-        self.current_live_timestamp = timestamp
-        self.current_live_txt_path = os.path.join(self.transcriptions_dir, f"transkrypcja_{timestamp}.txt")
-        self.current_live_wav_path = os.path.join(self.recordings_dir, f"inteligentne_nagranie_{timestamp}.wav")
+        day = self._load_day_record(now) if is_one_record_per_day() else None
         self.synced_segment_count = 0
         self._synced_turn_ids = set()
-        try:
-            with open(self.current_live_txt_path, 'w', encoding='utf-8') as f:
-                f.write(f"=== TRANSKRYPCJA NA ŻYWO (Start: {now.strftime('%Y-%m-%d %H:%M:%S')}) ===\n\n")
-            self._refresh_transcriptions_list()
-        except Exception:
-            pass
+        self.current_meeting_id = None
+        if day is not None:
+            timestamp = day["timestamp"]
+            self.session_start_time = day["start"]
+            self.current_live_timestamp = timestamp
+            self.current_live_txt_path = day["txt_path"]
+            self.current_live_wav_path = day["wav_path"]
+            self.current_meeting_id = day["meeting_id"]
+            self.current_turns = day["turns"]
+            self._synced_turn_ids = {get_turn_sync_id(t) for t in day["turns"]}
+            self.synced_segment_count = len(self._synced_turn_ids)
+            # Stoper pokazuje łączny czas nagrania z całego dnia
+            self._active_recorded_time = float(day["offset_sec"])
+            self.recorded_seconds = int(day["offset_sec"])
+            self.dock.set_time(self._format_clock(self.recorded_seconds))
+            logger.info(f"[SESJA START] Kontynuacja dzisiejszego nagrania {timestamp} "
+                        f"(wypowiedzi: {len(day['turns'])}, od {day['offset_sec']:.0f} s)")
+        else:
+            # Timestamp z mikrosekundami — zapobiega kolizji UUID5 przy szybkim Stop→Start w tej samej sekundzie
+            self.session_start_time = now
+            timestamp = now.strftime("%Y%m%d_%H%M%S_%f")
+            self.current_live_timestamp = timestamp
+            self.current_live_txt_path = os.path.join(self.transcriptions_dir, f"transkrypcja_{timestamp}.txt")
+            self.current_live_wav_path = os.path.join(self.recordings_dir, f"inteligentne_nagranie_{timestamp}.wav")
+            try:
+                with open(self.current_live_txt_path, 'w', encoding='utf-8') as f:
+                    f.write(f"=== TRANSKRYPCJA NA ŻYWO (Start: {now.strftime('%Y-%m-%d %H:%M:%S')}) ===\n\n")
+                self._refresh_transcriptions_list()
+            except Exception:
+                pass
 
         selected_model = get_default_model_id()
         self._active_model_id = selected_model
@@ -1290,7 +1311,8 @@ class SmartDictaphoneWindow(QMainWindow):
         # Inicjalizacja sesji w Supabase dla transmisji na żywo do CRM
         if self.cloud_sync.config.get("live_streaming") and self.cloud_sync.config.get("auto_sync"):
             self.current_meeting_id = self.cloud_sync.start_live_session_async(
-                title=f"Spotkanie biurowe {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                title=f"Spotkanie biurowe {self.session_start_time.strftime('%Y-%m-%d %H:%M')}",
+                meeting_id=self.current_meeting_id
             )
             target_name = self.cloud_sync.config.get("sync_target", "CRM").upper()
             self._set_cloud_status(f"Transmisja na żywo do {target_name} aktywna", "info")
@@ -1303,10 +1325,16 @@ class SmartDictaphoneWindow(QMainWindow):
         )
 
         from recorder.ui.widgets import polish_date_title
-        self._set_doc_header(polish_date_title(now))
-        self.text_transcript.setHtml(
-            "<p class='hint'>Słucham. Pierwsze zdania pojawią się tutaj po kilku sekundach mowy.</p>"
-        )
+        self._set_doc_header(polish_date_title(self.session_start_time))
+        if day is not None and self.current_turns:
+            html, _plain = format_turns(self.current_turns, session_start_time=self.session_start_time)
+            self.last_plain_text = _plain
+            self.text_transcript.setHtml(html)
+            self._scroll_transcript_view()
+        else:
+            self.text_transcript.setHtml(
+                "<p class='hint'>Słucham. Pierwsze zdania pojawią się tutaj po kilku sekundach mowy.</p>"
+            )
 
         # Zabezpieczenie: zatrzymanie i wyczyszczenie poprzedniego wątku rolling_worker
         if getattr(self, "rolling_worker", None) is not None:
@@ -1332,6 +1360,8 @@ class SmartDictaphoneWindow(QMainWindow):
         self.rolling_worker.status_signal.connect(self._on_rolling_status)
         self.rolling_worker.finished_signal.connect(self._on_rolling_finished)
         self.rolling_worker.error_signal.connect(self._on_rolling_error)
+        if day is not None:
+            self.rolling_worker.preload_session(day["turns"], day["words"], offset_sec=day["offset_sec"])
         self.rolling_worker.start()
 
         self.worker.rolling_block_ready_signal.connect(self.rolling_worker.add_block)
@@ -1347,8 +1377,11 @@ class SmartDictaphoneWindow(QMainWindow):
             target_app_filter=selected_target_app,
             save_wav_path=self.current_live_wav_path,
             mic_muted=getattr(self, "_mic_is_muted", False),
-            sys_muted=getattr(self, "_sys_is_muted", False)
+            sys_muted=getattr(self, "_sys_is_muted", False),
+            append_wav=day is not None
         )
+        # Dopisywanie w innym formacie (zmiana trybu nagrywania) trafia do pliku „_czN.wav”
+        self.current_live_wav_path = getattr(self.worker, "save_wav_path", None) or self.current_live_wav_path
         self.timer.start()
 
         self.btn_start.setEnabled(False)
@@ -1426,6 +1459,42 @@ class SmartDictaphoneWindow(QMainWindow):
     def _on_pause_clicked(self):
         self.worker.toggle_manual_pause()
 
+    def _load_day_record(self, now: datetime):
+        """
+        Dane dzisiejszego nagrania do kontynuacji (ścieżki, wypowiedzi, słowa, meeting_id, przesunięcie osi czasu)
+        albo None, gdy dziś jeszcze nic nie nagrano.
+        """
+        from recorder.core.day_record import find_day_record, timestamp_to_datetime
+        from recorder.audio.capture import wav_duration_seconds
+        ts = find_day_record(self.transcriptions_dir, now.date())
+        if not ts:
+            return None
+        txt_path = os.path.join(self.transcriptions_dir, f"transkrypcja_{ts}.txt")
+        wav_path = os.path.join(self.recordings_dir, f"inteligentne_nagranie_{ts}.wav")
+        sess = None
+        try:
+            sess = TranscriptionSession.load_from_json(get_session_path_for_txt(txt_path))
+        except Exception as e:
+            logger.warning(f"Nie udało się wczytać sesji dzisiejszego nagrania {ts}: {e}")
+        turns = [dict(t) for t in (getattr(sess, "turns", None) or []) if isinstance(t, dict)]
+        words = list(getattr(sess, "words", None) or [])
+        offset = wav_duration_seconds(wav_path) if os.path.exists(wav_path) else 0.0
+        # Nagranie mogło trafić też do plików „_czN.wav” - oś czasu liczymy od końca ostatniej wypowiedzi
+        try:
+            offset = max(offset, max((float(t.get("end", 0.0)) for t in turns), default=0.0))
+        except Exception:
+            pass
+        return {
+            "timestamp": ts,
+            "start": timestamp_to_datetime(ts) or now,
+            "txt_path": txt_path,
+            "wav_path": wav_path,
+            "turns": turns,
+            "words": words,
+            "meeting_id": getattr(sess, "meeting_id", None) or None,
+            "offset_sec": round(offset, 2),
+        }
+
     def _on_stop_clicked(self):
         self.timer.stop()
         self.worker.stop_recording()
@@ -1439,7 +1508,8 @@ class SmartDictaphoneWindow(QMainWindow):
 
         timestamp = getattr(self, "current_live_timestamp", datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
         filename = f"inteligentne_nagranie_{timestamp}.wav"
-        save_path = os.path.join(self.recordings_dir, filename)
+        save_path = getattr(self, "current_live_wav_path", None) or os.path.join(self.recordings_dir, filename)
+        self._finishing_live_txt_path = getattr(self, "current_live_txt_path", None)
 
         saved = self.worker.save_wav(save_path)
         self.last_audio_save_path = save_path if saved else None
@@ -1690,7 +1760,12 @@ class SmartDictaphoneWindow(QMainWindow):
         self.btn_upload.setEnabled(True)
         self._show_idle_view(show_text=True)
 
-        if self.last_audio_save_path:
+        live_txt = getattr(self, "_finishing_live_txt_path", None)
+        self._finishing_live_txt_path = None
+        if live_txt:
+            # Nagranie na żywo: transkrypcja zostaje w pliku sesji (także przy kontynuacji nagrania z tego dnia)
+            txt_filename = os.path.basename(live_txt)
+        elif self.last_audio_save_path:
             base_name = os.path.basename(self.last_audio_save_path)
             file_stem = os.path.splitext(base_name)[0]
             txt_filename = f"transkrypcja_{file_stem.replace('inteligentne_nagranie_', '')}.txt"
@@ -1865,6 +1940,10 @@ class SmartDictaphoneWindow(QMainWindow):
         i rozpoczyna nowe spotkanie w Supabase bez przerywania ciągłego nasłuchu mikrofonu.
         """
         print(f"[SMART SESSION] Podział sesji wywołany przez: {reason}")
+        start_dt = getattr(self, "session_start_time", None)
+        if is_one_record_per_day() and start_dt is not None and start_dt.date() == datetime.now().date():
+            print("[SMART SESSION] Jedno nagranie na dzień: długa cisza nie zaczyna nowego nagrania.")
+            return
         
         # 1. Zachowaj metadane zamykanej sesji
         old_meeting_id = self.current_meeting_id

@@ -691,6 +691,11 @@ class SettingsDialog(QDialog):
         self.combo_session_split.addItem("1 godzina ciągłej ciszy", 3600.0)
         self.combo_session_split.addItem("Wyłączone (Zawsze jedna długa sesja)", 0.0)
         time_layout.addRow(QLabel("Automatyczny podział sesji:"), self.combo_session_split)
+        self.chk_one_record_per_day = QCheckBox("Jedno nagranie dziennie: Start po Stop kontynuuje dzisiejsze nagranie")
+        self.chk_one_record_per_day.setToolTip(
+            "Tego samego dnia transkrypcja, plik WAV i spotkanie w chmurze są kontynuowane zamiast zaczynać nowe. "
+            "Długa cisza też nie dzieli nagrania; nowe zaczyna się następnego dnia.")
+        time_layout.addRow("", self.chk_one_record_per_day)
 
         self.combo_silence_alert = QComboBox()
         self.combo_silence_alert.addItem("1 minuta braku głosu (Szybki alert)", 1.0)
@@ -1311,6 +1316,7 @@ class SettingsDialog(QDialog):
         s_idx = self.combo_session_split.findData(split_sec)
         if s_idx != -1:
             self.combo_session_split.setCurrentIndex(s_idx)
+        self.chk_one_record_per_day.setChecked(bool(st.get("one_record_per_day", True)))
 
         alert_mins = float(st.get("silence_alert_minutes", 5.0))
         a_idx = self.combo_silence_alert.findData(alert_mins)
@@ -1414,6 +1420,7 @@ class SettingsDialog(QDialog):
             self.slider_vad_sys.setValue(42)
             self.slider_auto_pause.setValue(5)
             self.combo_session_split.setCurrentIndex(self.combo_session_split.findData(900.0))
+            self.chk_one_record_per_day.setChecked(True)
             self.combo_silence_alert.setCurrentIndex(self.combo_silence_alert.findData(5.0))
             if hasattr(self, "appearance_tab"):
                 self.appearance_tab.reset_to_defaults()
@@ -1451,6 +1458,7 @@ class SettingsDialog(QDialog):
             "system_vad_speech_threshold": round(self.slider_vad_sys.value() / 100.0, 2),
             "auto_pause_sec": float(self.slider_auto_pause.value()),
             "session_split_silence_sec": float(self.combo_session_split.currentData() or 900.0),
+            "one_record_per_day": self.chk_one_record_per_day.isChecked(),
             "silence_alert_minutes": float(self.combo_silence_alert.currentData() if self.combo_silence_alert.currentData() is not None else 5.0),
             "timestamp_format": self.combo_timestamp_format.currentData() or "clock_only",
             "preview_order": self.combo_preview_order.currentData() or "newest_first",

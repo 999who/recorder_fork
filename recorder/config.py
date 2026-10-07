@@ -20,7 +20,7 @@ os.makedirs(TRANSCRIPTIONS_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Wersja aplikacji i repozytorium GitHub
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 GITHUB_REPO = "999who/recorder_fork"
 
 # Parametry audio i VAD
@@ -250,6 +250,7 @@ def load_user_settings(force_reload: bool = False) -> dict:
         "mic_name_4": get_env_variable("MIC_NAME_4", "Osoba 4"),
         "mic_name": get_env_variable("MIC_NAME", ""),          # podpis mikrofonu (pusto = „Mikrofon”)
         "system_name": get_env_variable("SYSTEM_NAME", ""),    # podpis dźwięku systemu (pusto = „Dźwięk Systemu”)
+        "one_record_per_day": get_env_variable("ONE_RECORD_PER_DAY", "true").lower() in ("1", "true", "yes"),
         "parakeet_model_path": get_env_variable("PARAKEET_MODEL_PATH", ""),
         "custom_replacements": [],            # lista par [błędnie, poprawnie] stosowana po rozpoznaniu
         "replacements_for_whisper": False,    # autokorekty domyślnie tylko dla Parakeet (Whisper ma initial_prompt)
@@ -501,6 +502,11 @@ def get_mic_channel_names() -> List[str]:
     """Nazwy osób przypisane do kanałów 1-4 mikrofonu wielokanałowego (puste pole = „Osoba N”)."""
     st = load_user_settings()
     return [str(st.get(f"mic_name_{i}", "")).strip() or f"Osoba {i}" for i in range(1, 5)]
+
+
+def is_one_record_per_day() -> bool:
+    """Czy Start po Stop tego samego dnia kontynuuje dzisiejsze nagranie zamiast zaczynać nowe."""
+    return bool(load_user_settings().get("one_record_per_day", True))
 
 
 DEFAULT_MIC_NAME = "Mikrofon"

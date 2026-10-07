@@ -41,6 +41,7 @@ graph TD
 ## 3. Status Realizacji: Co jest ZROBIONE vs Roadmapa
 
 ### ✅ ZROBIONE (Stan obecny w repozytorium):
+- [x] **Jedno nagranie dziennie (v2.0.2)**: Start po Stop tego samego dnia kontynuuje dzisiejszą transkrypcję, WAV i spotkanie w chmurze.
 - [x] **Podpisy mówców i wybór wyjścia (v2.0.1)**: nazwy kanałów edytowane z paska źródeł na ekranie głównym; kanał dźwięku systemu podąża za wyjściem, na którym gra rozmowa.
 - [x] **Aplikacja Desktopowa GUI (PySide6)**: Nowoczesny interfejs, wskaźniki VU meter poziomu głośności, zegar nagrywania, zarządzanie plikami nagrań i transkrypcji.
 - [x] **Silero VAD (Voice Activity Detection)**: Detekcja mowy AI w czasie rzeczywistym, pre-padding zapobiegający ucinaniu słów, regulacja progu ciszy i auto-wznawianie.

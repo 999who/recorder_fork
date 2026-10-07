@@ -1,3 +1,11 @@
+## [v2.0.2]: Jedno nagranie dziennie
+
+- Start po Stop tego samego dnia kontynuuje dzisiejsze nagranie: ta sama transkrypcja, ten sam plik WAV (dopisywany), to samo spotkanie w chmurze, a stoper pokazuje łączny czas dnia. Nowe nagranie zaczyna się następnego dnia.
+- Długa cisza nie dzieli już nagrania w ciągu dnia.
+- Można to wyłączyć w Ustawienia → Nagrywanie („Jedno nagranie dziennie”).
+
+---
+
 ## [v2.0.1]: Podpisy mówców z ekranu głównego, poprawne nagrywanie dźwięku systemu
 
 - Kliknięcie paska źródeł na ekranie głównym otwiera okienko „Podpisy w transkrypcji”: własna nazwa zamiast „Mikrofon” / „Dźwięk Systemu” (także dla kanałów odbiornika wielokanałowego), działa też w trakcie nagrania.

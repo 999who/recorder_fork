@@ -329,7 +329,7 @@ class SmartAudioWorker(QThread):
 
     def start_recording(self, device_index=None, loopback_device_index=None,
                         source_mode=None, target_app_filter: str = "", save_wav_path: Optional[str] = None,
-                        mic_muted: bool = False, sys_muted: bool = False):
+                        mic_muted: bool = False, sys_muted: bool = False, append_wav: bool = False):
         self.device_index = device_index
         self.target_app_filter = target_app_filter or ""
         self.app_monitor.set_filter(self.target_app_filter)
@@ -379,7 +379,9 @@ class SmartAudioWorker(QThread):
             self.save_wav_path = os.path.abspath(save_wav_path)
             is_hybrid = (self.source_mode == RecordSourceMode.HYBRID_DUAL) and HAS_PYAUDIOWPATCH
             wav_ch = 2 if is_hybrid else 1
-            self.wav_writer = StreamingWavWriter(save_wav_path, channels=wav_ch, samplerate=16000)
+            self.wav_writer = StreamingWavWriter(save_wav_path, channels=wav_ch, samplerate=16000, append=append_wav)
+            # Przy dopisywaniu do nagrania z tego dnia w innym formacie zapis idzie do pliku „_czN.wav”
+            self.save_wav_path = os.path.abspath(self.wav_writer.file_path)
         else:
             self.save_wav_path = None
 
